@@ -1,6 +1,6 @@
 """
-dashboard_app.py  –  Comprehensive Generic Analytics Dashboard
-============================================================
+dashboard_app.py  –  Autonomous Data Analytics & Cleaning Engine
+================================================================
 Run:  streamlit run dashboard_app.py
 """
 
@@ -86,6 +86,15 @@ h1, h2, h3, h4, h5, h6, .markdown-text-container { color: #F9FAFB !important; }
 
 [data-testid="stDataFrame"] { background: #111827; border-radius: 16px; padding: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
 hr { border-top: 1px solid #1F2937; }
+
+/* Custom Buttons */
+button[kind="primary"] {
+    background-color: #F8D870 !important;
+    color: #1A1A1A !important;
+    border-radius: 100px !important;
+    font-weight: bold !important;
+    border: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,7 +121,7 @@ def style_plotly(fig):
     return fig
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STEP 0 – Load Generic Data
+# STEP 0 – Load Data
 # ═══════════════════════════════════════════════════════════════════════════
 @st.cache_data
 def load_data(path):
@@ -122,6 +131,7 @@ def load_data(path):
     except Exception:
         df = pd.read_csv(path) if str(path).endswith(".csv") else pd.read_excel(path)
     
+    # Auto-parse dates
     for col in df.columns:
         if df[col].dtype == 'object':
             if df[col].astype(str).str.contains(r'^\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}', regex=True).any():
@@ -129,8 +139,8 @@ def load_data(path):
                 except: pass
     return df
 
-st.title("📊 Data Analytics Dashboard")
-st.markdown("#### Comprehensive exploratory data analysis for any dataset")
+st.title("📊 Autonomous Data Analytics Engine")
+st.markdown("#### Self-cleaning, intelligent exploratory data analysis")
 st.markdown("---")
 
 uploaded = st.sidebar.file_uploader("📂 Upload any Excel or CSV file", type=["xlsx", "xls", "csv"])
@@ -143,12 +153,20 @@ try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp.write(uploaded.read())
             tmp_path = tmp.name
-        df = load_data(tmp_path)
+        raw_df = load_data(tmp_path)
     else:
-        df = load_data(default_path)
+        raw_df = load_data(default_path)
 except Exception as e:
     st.error(f"Error loading file: {e}")
     st.stop()
+
+# Initialize session state for cleaned dataframe
+if "clean_df" not in st.session_state or "last_uploaded" not in st.session_state or st.session_state.last_uploaded != (uploaded.name if uploaded else "default"):
+    st.session_state.clean_df = raw_df.copy()
+    st.session_state.last_uploaded = uploaded.name if uploaded else "default"
+    st.session_state.cleaning_logs = []
+
+df = st.session_state.clean_df
 
 # Classify columns
 all_cols = df.columns.tolist()
@@ -156,25 +174,11 @@ numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 date_cols = df.select_dtypes(include=['datetime', 'datetimetz']).columns.tolist()
 categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
 
-if not numeric_cols:
-    st.warning("⚠️ No numeric columns found. Advanced analytics require at least one numeric value.")
-    st.stop()
-
 # ═══════════════════════════════════════════════════════════════════════════
-# METRICS OVERVIEW
-# ═══════════════════════════════════════════════════════════════════════════
-c1, c2, c3, c4 = st.columns(4)
-c1.markdown(f'<div class="metric-card"><div class="metric-label">Total Rows</div><div class="metric-value">{len(df):,}</div></div>', unsafe_allow_html=True)
-c2.markdown(f'<div class="metric-card"><div class="metric-label">Total Columns</div><div class="metric-value">{len(df.columns)}</div></div>', unsafe_allow_html=True)
-if len(numeric_cols) >= 1:
-    c3.markdown(f'<div class="metric-card"><div class="metric-label">Sum of {numeric_cols[0]}</div><div class="metric-value">{df[numeric_cols[0]].sum():,.1f}</div></div>', unsafe_allow_html=True)
-if len(numeric_cols) >= 2:
-    c4.markdown(f'<div class="metric-card"><div class="metric-label">Avg of {numeric_cols[1]}</div><div class="metric-value">{df[numeric_cols[1]].mean():,.1f}</div></div>', unsafe_allow_html=True)
-
-# ═══════════════════════════════════════════════════════════════════════════
-# ANALYTICS ENGINE
+# ANALYTICS ENGINE TABS
 # ═══════════════════════════════════════════════════════════════════════════
 tabs = st.tabs([
+    "🧹 Data Cleaning",
     "📈 Overview", 
     "📦 Distributions", 
     "🔄 Correlations", 
@@ -183,10 +187,102 @@ tabs = st.tabs([
     "📋 Raw Data"
 ])
 
-# ── 1. OVERVIEW ─────────────────────────────────────────────────────────────
+# ── 0. DATA CLEANING ────────────────────────────────────────────────────────
 with tabs[0]:
+    st.markdown('<div class="step-banner">Autonomous Data Preparation</div>', unsafe_allow_html=True)
+    st.markdown("<small style='color:#9CA3AF;'>Use the autonomous engine to instantly clean messy data, or manually apply specific operations.</small>", unsafe_allow_html=True)
+    
+    col_c1, col_c2 = st.columns([1, 2])
+    
+    with col_c1:
+        st.markdown("##### 🩺 Data Health Check")
+        missing_count = df.isna().sum().sum()
+        dup_count = df.duplicated().sum()
+        
+        st.info(f"**Missing Values:** {missing_count:,}")
+        st.info(f"**Duplicate Rows:** {dup_count:,}")
+        st.info(f"**Shape:** {df.shape[0]:,} rows × {df.shape[1]} cols")
+        
+        if st.button("✨ Auto-Clean Dataset", type="primary", use_container_width=True):
+            clean_temp = df.copy()
+            logs = []
+            
+            # Drop duplicates
+            d_count = clean_temp.duplicated().sum()
+            if d_count > 0:
+                clean_temp.drop_duplicates(inplace=True)
+                logs.append(f"✓ Dropped {d_count} duplicate rows.")
+                
+            # Fill numeric NAs with Median
+            num_cols = clean_temp.select_dtypes(include=[np.number]).columns
+            for col in num_cols:
+                n_count = clean_temp[col].isna().sum()
+                if n_count > 0:
+                    clean_temp[col].fillna(clean_temp[col].median(), inplace=True)
+                    logs.append(f"✓ Filled {n_count} missing values in {col} with median.")
+                    
+            # Fill categorical NAs with 'Unknown'
+            cat_cols = clean_temp.select_dtypes(include=['object', 'category']).columns
+            for col in cat_cols:
+                c_count = clean_temp[col].isna().sum()
+                if c_count > 0:
+                    clean_temp[col].fillna('Unknown', inplace=True)
+                    logs.append(f"✓ Filled {c_count} missing values in {col} with 'Unknown'.")
+                    
+            # Strip whitespace
+            for col in cat_cols:
+                if clean_temp[col].dtype == 'object':
+                    clean_temp[col] = clean_temp[col].astype(str).str.strip()
+                    
+            if not logs:
+                logs.append("Dataset is already clean! No actions needed.")
+                
+            st.session_state.clean_df = clean_temp
+            st.session_state.cleaning_logs = logs
+            st.rerun()
+            
+        if st.button("🔄 Reset to Original", use_container_width=True):
+            st.session_state.clean_df = raw_df.copy()
+            st.session_state.cleaning_logs = ["Reset to original raw dataset."]
+            st.rerun()
+
+    with col_c2:
+        st.markdown("##### 🛠️ Manual Operations")
+        with st.expander("Remove Nulls / NAs"):
+            if st.button("Drop Rows with ANY missing values"):
+                st.session_state.clean_df.dropna(inplace=True)
+                st.session_state.cleaning_logs.append("✓ Dropped all rows containing missing values.")
+                st.rerun()
+                
+        with st.expander("Drop Columns"):
+            cols_to_drop = st.multiselect("Select columns to drop", df.columns.tolist())
+            if st.button("Drop Selected Columns") and cols_to_drop:
+                st.session_state.clean_df.drop(columns=cols_to_drop, inplace=True)
+                st.session_state.cleaning_logs.append(f"✓ Dropped columns: {', '.join(cols_to_drop)}")
+                st.rerun()
+
+        if st.session_state.cleaning_logs:
+            st.markdown("##### 📜 Action Logs")
+            for log in st.session_state.cleaning_logs:
+                st.markdown(f"<span style='color:{C_GREEN};'>{log}</span>", unsafe_allow_html=True)
+
+
+if not numeric_cols:
+    st.warning("⚠️ No numeric columns remaining after cleaning. Advanced analytics require at least one numeric value.")
+    st.stop()
+
+# ── 1. OVERVIEW ─────────────────────────────────────────────────────────────
+with tabs[1]:
     st.markdown('<div class="step-banner">Dataset Profiling & Composition</div>', unsafe_allow_html=True)
     
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f'<div class="metric-card"><div class="metric-label">Total Rows</div><div class="metric-value">{len(df):,}</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="metric-card"><div class="metric-label">Total Columns</div><div class="metric-value">{len(df.columns)}</div></div>', unsafe_allow_html=True)
+    if len(numeric_cols) >= 1:
+        c3.markdown(f'<div class="metric-card"><div class="metric-label">Sum of {numeric_cols[0]}</div><div class="metric-value">{df[numeric_cols[0]].sum():,.1f}</div></div>', unsafe_allow_html=True)
+    if len(numeric_cols) >= 2:
+        c4.markdown(f'<div class="metric-card"><div class="metric-label">Avg of {numeric_cols[1]}</div><div class="metric-value">{df[numeric_cols[1]].mean():,.1f}</div></div>', unsafe_allow_html=True)
+
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("##### 📝 Statistical Summary (Numeric)")
@@ -203,7 +299,7 @@ with tabs[0]:
             st.plotly_chart(fig_pie, use_container_width=True)
 
 # ── 2. DISTRIBUTIONS ────────────────────────────────────────────────────────
-with tabs[1]:
+with tabs[2]:
     st.markdown('<div class="step-banner">Data Shape & Outliers</div>', unsafe_allow_html=True)
     
     if numeric_cols:
@@ -231,7 +327,7 @@ with tabs[1]:
             st.plotly_chart(fig_box, use_container_width=True)
 
 # ── 3. CORRELATIONS ─────────────────────────────────────────────────────────
-with tabs[2]:
+with tabs[3]:
     st.markdown('<div class="step-banner">Relationships & Drivers</div>', unsafe_allow_html=True)
     
     col_a, col_b = st.columns([1, 1.5])
@@ -265,7 +361,7 @@ with tabs[2]:
             st.plotly_chart(fig_scat, use_container_width=True)
 
 # ── 4. TIME INTELLIGENCE ────────────────────────────────────────────────────
-with tabs[3]:
+with tabs[4]:
     st.markdown('<div class="step-banner">Time Series & Seasonality</div>', unsafe_allow_html=True)
     
     if date_cols:
@@ -301,7 +397,7 @@ with tabs[3]:
         st.info("⚠️ No Date/Time columns detected in the dataset. Time intelligence is disabled.")
 
 # ── 5. DEEP DIVE (Pareto & Crosstab) ────────────────────────────────────────
-with tabs[4]:
+with tabs[5]:
     st.markdown('<div class="step-banner">Advanced Segment Cross-Analysis</div>', unsafe_allow_html=True)
     
     if len(categorical_cols) >= 2 and numeric_cols:
@@ -348,8 +444,8 @@ with tabs[4]:
         st.info("Need at least 2 categorical columns and 1 numeric column for Advanced Cross-Analysis.")
 
 # ── 6. RAW DATA ─────────────────────────────────────────────────────────────
-with tabs[5]:
-    st.markdown("##### 🔎 Filtered Records")
+with tabs[6]:
+    st.markdown("##### 🔎 Filtered & Cleaned Records")
     st.dataframe(df, use_container_width=True, height=450)
     st.download_button("⬇️ Export to CSV", df.to_csv(index=False).encode("utf-8"), "dataset_export.csv", "text/csv")
 
