@@ -10,6 +10,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import tempfile
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -87,7 +88,6 @@ h1, h2, h3, h4, h5, h6, .markdown-text-container { color: #F9FAFB !important; }
 [data-testid="stDataFrame"] { background: #111827; border-radius: 16px; padding: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
 hr { border-top: 1px solid #1F2937; }
 
-/* Custom Buttons */
 button[kind="primary"] {
     background-color: #F8D870 !important;
     color: #1A1A1A !important;
@@ -121,49 +121,87 @@ def style_plotly(fig):
     return fig
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STEP 0 – Load Data
+# DATA LOADING ENGINE
 # ═══════════════════════════════════════════════════════════════════════════
+st.title("📊 Autonomous Data Analytics Engine")
+st.markdown("#### Self-cleaning, intelligent exploratory data analysis")
+st.markdown("---")
+
+st.sidebar.markdown("### 📂 1. Upload Data")
+uploaded = st.sidebar.file_uploader("Upload Excel or CSV file", type=["xlsx", "xls", "csv"])
+default_path = "sales_data.xlsx"
+
 @st.cache_data
-def load_data(path):
-    try:
+def get_sheet_names(path):
+    return pd.ExcelFile(path).sheet_names
+
+@st.cache_data
+def load_data(path, sheet_name=None, skiprows=0, is_csv=False):
+    if is_csv:
+        df = pd.read_csv(path, skiprows=skiprows)
+    else:
         xl = pd.ExcelFile(path)
-        df = xl.parse(xl.sheet_names[0])
-    except Exception:
-        df = pd.read_csv(path) if str(path).endswith(".csv") else pd.read_excel(path)
+        sheet = sheet_name if sheet_name else xl.sheet_names[0]
+        df = xl.parse(sheet, skiprows=skiprows)
     
-    # Auto-parse dates
+    # 1. Drop completely empty rows and columns
+    df.dropna(how='all', axis=0, inplace=True)
+    df.dropna(how='all', axis=1, inplace=True)
+    
+    # 2. Smart Parsing: Try to convert currency/percentage strings to floats
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            # Check if it looks like a currency ($1,200.50)
+            if df[col].astype(str).str.match(r'^\$?\s*[\d,]+(\.\d+)?$').all():
+                try: df[col] = df[col].replace({'\$': '', ',': ''}, regex=True).astype(float)
+                except: pass
+            # Check if it looks like a percentage (45%)
+            elif df[col].astype(str).str.match(r'^-?\d+(\.\d+)?%$').all():
+                try: df[col] = df[col].replace({'%': ''}, regex=True).astype(float) / 100
+                except: pass
+                
+    # 3. Auto-parse dates
     for col in df.columns:
         if df[col].dtype == 'object':
             if df[col].astype(str).str.contains(r'^\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}', regex=True).any():
                 try: df[col] = pd.to_datetime(df[col], errors='ignore')
                 except: pass
+                
     return df
 
-st.title("📊 Autonomous Data Analytics Engine")
-st.markdown("#### Self-cleaning, intelligent exploratory data analysis")
-st.markdown("---")
+# Handle Complex File Ingestion
+file_path_to_use = default_path
+is_csv = False
 
-uploaded = st.sidebar.file_uploader("📂 Upload any Excel or CSV file", type=["xlsx", "xls", "csv"])
-default_path = "sales_data.xlsx"
+if uploaded:
+    is_csv = uploaded.name.endswith(".csv")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv" if is_csv else ".xlsx") as tmp:
+        tmp.write(uploaded.read())
+        file_path_to_use = tmp.name
+
+st.sidebar.markdown("### ⚙️ 2. Configuration")
+selected_sheet = None
+if not is_csv:
+    try:
+        sheets = get_sheet_names(file_path_to_use)
+        selected_sheet = st.sidebar.selectbox("Select Excel Sheet", sheets)
+    except Exception as e:
+        st.error(f"Failed to read sheets: {e}")
+        st.stop()
+
+skip_rows = st.sidebar.number_input("Skip Header Rows (If data starts lower)", min_value=0, value=0)
 
 try:
-    if uploaded:
-        import tempfile
-        ext = ".csv" if uploaded.name.endswith(".csv") else ".xlsx"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-            tmp.write(uploaded.read())
-            tmp_path = tmp.name
-        raw_df = load_data(tmp_path)
-    else:
-        raw_df = load_data(default_path)
+    raw_df = load_data(file_path_to_use, sheet_name=selected_sheet, skiprows=skip_rows, is_csv=is_csv)
 except Exception as e:
-    st.error(f"Error loading file: {e}")
+    st.error(f"Error loading data. Check if 'Skip Rows' is correct. Error: {e}")
     st.stop()
 
 # Initialize session state for cleaned dataframe
-if "clean_df" not in st.session_state or "last_uploaded" not in st.session_state or st.session_state.last_uploaded != (uploaded.name if uploaded else "default"):
+config_id = f"{uploaded.name if uploaded else 'default'}_{selected_sheet}_{skip_rows}"
+if "clean_df" not in st.session_state or "config_id" not in st.session_state or st.session_state.config_id != config_id:
     st.session_state.clean_df = raw_df.copy()
-    st.session_state.last_uploaded = uploaded.name if uploaded else "default"
+    st.session_state.config_id = config_id
     st.session_state.cleaning_logs = []
 
 df = st.session_state.clean_df
@@ -268,7 +306,7 @@ with tabs[0]:
 
 
 if not numeric_cols:
-    st.warning("⚠️ No numeric columns remaining after cleaning. Advanced analytics require at least one numeric value.")
+    st.warning("⚠️ No numeric columns remaining. Advanced analytics require at least one numeric value. Try adjusting 'Skip Rows' if headers are lower.")
     st.stop()
 
 # ── 1. OVERVIEW ─────────────────────────────────────────────────────────────
@@ -384,7 +422,6 @@ with tabs[4]:
             # Day of Week Seasonality
             dow_df = df.copy()
             dow_df['DayOfWeek'] = dow_df[time_col].dt.day_name()
-            # Order days logically
             cats = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             dow_df['DayOfWeek'] = pd.Categorical(dow_df['DayOfWeek'], categories=cats, ordered=True)
             dow_agg = dow_df.groupby('DayOfWeek')[val_col].mean().reset_index()
