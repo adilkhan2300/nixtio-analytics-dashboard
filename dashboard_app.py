@@ -35,54 +35,25 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Theme Selector ─────────────────────────────────────────────────────────
-THEMES = {
-    "Amber (Default)": "#F8D870",
-    "Ocean Blue": "#3B82F6",
-    "Emerald Green": "#10B981",
-    "Amethyst Purple": "#8B5CF6",
-    "Rose Red": "#F43F5E",
-    "Cyberpunk Pink": "#D946EF"
-}
-
-st.sidebar.markdown("### 🎨 0. Theme Settings")
-selected_theme = st.sidebar.selectbox("Choose Theme Color", list(THEMES.keys()), key="theme_selector")
-C_PRIMARY = THEMES[selected_theme]
-
-# Optional matrix color scales
-MATRIX_CMAPS = {
-    "Theme Default": ["#1F2937", C_PRIMARY, "#FFFFFF"],
-    "Viridis": "Viridis",
-    "Plasma": "Plasma",
-    "Inferno": "Inferno",
-    "Magma": "Magma",
-    "Blues": "Blues",
-    "Reds": "Reds",
-    "Greens": "Greens",
-    "Earth": "Earth"
-}
-selected_cmap_name = st.sidebar.selectbox("Matrix Color Scale", list(MATRIX_CMAPS.keys()), key="cmap_selector")
-SELECTED_CMAP = MATRIX_CMAPS[selected_cmap_name]
-
 # ─── Custom CSS (Dark Theme) ────────────────────────────────────────────────
-st.markdown(f"""
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-* {{ font-family: 'Inter', sans-serif; }}
-body, .main, .stApp {{ 
+* { font-family: 'Inter', sans-serif; }
+body, .main, .stApp { 
     background-color: #0B0F19 !important;
     color: #F9FAFB !important;
-}}
+}
 
-[data-testid="stSidebar"] {{
+[data-testid="stSidebar"] {
     background-color: #111827 !important;
     border-right: 1px solid #1F2937;
-}}
-[data-testid="stSidebar"] * {{ color: #F9FAFB !important; }}
-h1, h2, h3, h4, h5, h6, .markdown-text-container {{ color: #F9FAFB !important; }}
+}
+[data-testid="stSidebar"] * { color: #F9FAFB !important; }
+h1, h2, h3, h4, h5, h6, .markdown-text-container { color: #F9FAFB !important; }
 
-.metric-card {{
+.metric-card {
     background: rgba(31, 41, 55, 0.7);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -91,14 +62,14 @@ h1, h2, h3, h4, h5, h6, .markdown-text-container {{ color: #F9FAFB !important; }
     margin-bottom: 24px;
     box-shadow: 0 10px 40px -10px rgba(0,0,0,0.3);
     transition: transform 0.2s ease;
-}}
-.metric-card:hover {{ transform: translateY(-2px); box-shadow: 0 15px 50px -10px rgba(0,0,0,0.5); }}
-.metric-label {{ color: #9CA3AF; font-size: 14px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }}
-.metric-value {{ color: #F9FAFB; font-size: 32px; font-weight: 800; letter-spacing: -1px; }}
+}
+.metric-card:hover { transform: translateY(-2px); box-shadow: 0 15px 50px -10px rgba(0,0,0,0.5); }
+.metric-label { color: #9CA3AF; font-size: 14px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.metric-value { color: #F9FAFB; font-size: 32px; font-weight: 800; letter-spacing: -1px; }
 
-.step-banner {{
+.step-banner {
     background: #111827;
-    border-left: 6px solid {C_PRIMARY};
+    border-left: 6px solid #F8D870;
     border-radius: 16px;
     padding: 18px 24px;
     margin: 32px 0 16px 0;
@@ -106,9 +77,9 @@ h1, h2, h3, h4, h5, h6, .markdown-text-container {{ color: #F9FAFB !important; }
     font-weight: 700;
     font-size: 20px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-}}
+}
 
-.explanation-box {{
+.explanation-box {
     background: #111827;
     border: 1px solid #1F2937;
     border-radius: 16px;
@@ -117,31 +88,31 @@ h1, h2, h3, h4, h5, h6, .markdown-text-container {{ color: #F9FAFB !important; }
     color: #9CA3AF;
     font-size: 14px;
     line-height: 1.6;
-}}
-.explanation-box b {{ color: #F9FAFB; font-size: 15px; }}
+}
+.explanation-box b { color: #F9FAFB; font-size: 15px; }
 
-.stTabs [data-baseweb="tab-list"] {{ gap: 8px; background: transparent; }}
-.stTabs [data-baseweb="tab"] {{
+.stTabs [data-baseweb="tab-list"] { gap: 8px; background: transparent; }
+.stTabs [data-baseweb="tab"] {
     background: #111827; border-radius: 100px; padding: 8px 20px;
     color: #9CA3AF; font-weight: 600; border: 1px solid #1F2937;
-}}
-.stTabs [aria-selected="true"] {{ background: {C_PRIMARY} !important; color: #111827 !important; border: 1px solid {C_PRIMARY} !important; }}
+}
+.stTabs [aria-selected="true"] { background: #F8D870 !important; color: #111827 !important; border: 1px solid #F8D870 !important; }
 
-[data-testid="stDataFrame"] {{ background: #111827; border-radius: 16px; padding: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }}
-hr {{ border-top: 1px solid #1F2937; }}
+[data-testid="stDataFrame"] { background: #111827; border-radius: 16px; padding: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+hr { border-top: 1px solid #1F2937; }
 
-button[kind="primary"] {{
-    background-color: {C_PRIMARY} !important;
+button[kind="primary"] {
+    background-color: #F8D870 !important;
     color: #1A1A1A !important;
     border-radius: 100px !important;
     font-weight: bold !important;
     border: none !important;
-}}
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ─── Color Palette ──────────────────────────────────────────────────────────
-C_AMBER = C_PRIMARY
+C_AMBER = "#F8D870"
 C_BLACK = "#1A1A1A"
 C_WHITE = "#FFFFFF"
 C_GRAY_LIGHT = "#1F2937"
@@ -335,7 +306,7 @@ if len(all_dataset_labels) > 0:
                 badge = f"✅ **{lbl}**  `{_tmp.shape[0]:,}r × {_tmp.shape[1]}c`"
             except:
                 badge = f"❌ **{lbl}** (error)"
-            is_active = f"border: 2px solid {C_PRIMARY};" if lbl == active_label else ""
+            is_active = "border: 2px solid #F8D870;" if lbl == active_label else ""
             cols_status[i].markdown(
                 f"<div class='metric-card' style='padding:12px 16px;{is_active}'>"
                 f"<div class='metric-label'>Dataset {i+1}</div>"
@@ -519,7 +490,7 @@ with tabs[3]:
         if len(numeric_cols) > 1:
             corr = df[numeric_cols].corr()
             fig_corr = px.imshow(corr, text_auto=".2f", aspect="auto", 
-                                 color_continuous_scale=SELECTED_CMAP, zmin=-1, zmax=1)
+                                 color_continuous_scale=[C_GRAY_LIGHT, C_AMBER, C_WHITE], zmin=-1, zmax=1)
             fig_corr = style_plotly(fig_corr)
             fig_corr.update_layout(height=450, margin=dict(l=0, r=0, t=10, b=0))
             st.plotly_chart(fig_corr, use_container_width=True)
@@ -615,7 +586,7 @@ with tabs[5]:
             if ct_row != ct_col:
                 pivot = df.pivot_table(values=ct_val, index=ct_row, columns=ct_col, aggfunc="sum").fillna(0)
                 fig_ct = px.imshow(pivot, text_auto=".2s", aspect="auto", 
-                                   color_continuous_scale=SELECTED_CMAP,
+                                   color_continuous_scale=[C_GRAY_LIGHT, C_AMBER, C_WHITE],
                                    title=f"{ct_val} by {ct_row} & {ct_col}")
                 fig_ct = style_plotly(fig_ct)
                 st.plotly_chart(fig_ct, use_container_width=True)
