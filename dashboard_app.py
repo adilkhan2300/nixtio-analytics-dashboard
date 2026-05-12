@@ -13,10 +13,10 @@ from plotly.subplots import make_subplots
 import tempfile, warnings, io, datetime
 warnings.filterwarnings("ignore")
 try:
-    from sklearn.linear_model import LinearRegression
-    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.linear_model import LinearRegression, LogisticRegression
+    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
     from sklearn.model_selection import train_test_split
-    from sklearn.metrics import r2_score, mean_absolute_error
+    from sklearn.metrics import r2_score, mean_absolute_error, accuracy_score
     from sklearn.preprocessing import LabelEncoder
     SKLEARN_OK = True
 except ImportError:
@@ -262,6 +262,7 @@ tabs = st.tabs([
     "💡 Business Insights",
     "⚙️ Automation",
     "🏛️ Governance",
+    "💬 AI Chatbot",
     "📋 Raw Data"
 ])
 
@@ -375,6 +376,11 @@ with tabs[1]:
                              color_discrete_sequence=CHART_COLORS, title=f"Top 10 {cat_ov} Share")
             fig_pie = style_plotly(fig_pie)
             st.plotly_chart(fig_pie, use_container_width=True)
+            
+            # 🤖 AI Analyst Explanation
+            top_cat_name = counts.iloc[0][cat_ov]
+            top_cat_pct = (counts.iloc[0]['Count'] / counts['Count'].sum()) * 100
+            st.info(f"**🤖 AI Analyst:** `{top_cat_name}` is the dominant category here, representing **{top_cat_pct:.1f}%** of the top 10 segments shown. Strategies should heavily prioritize this segment.")
 
 # ── 2. DISTRIBUTIONS ────────────────────────────────────────────────────────
 with tabs[2]:
@@ -390,6 +396,14 @@ with tabs[2]:
                                     title=f"Distribution of {hist_col}")
             fig_hist = style_plotly(fig_hist)
             st.plotly_chart(fig_hist, use_container_width=True)
+            
+            # 🤖 AI Analyst Explanation
+            s = df[hist_col].dropna()
+            skew = s.skew()
+            if skew > 1: skew_str = "right-skewed (contains unusually high spikes/anomalies)"
+            elif skew < -1: skew_str = "left-skewed (contains unusually low drops/anomalies)"
+            else: skew_str = "relatively balanced"
+            st.info(f"**🤖 AI Analyst:** The distribution for `{hist_col}` is **{skew_str}**. Most values cluster around {s.median():,.1f}, with extremes ranging from {s.min():,.1f} to {s.max():,.1f}.")
             
         with col_y:
             st.markdown("##### 📦 Outlier Detection (Box Plot)")
@@ -457,6 +471,15 @@ with tabs[4]:
             fig_line.update_traces(line=dict(color=C_WHITE, width=3), marker=dict(color=C_AMBER, size=8))
             fig_line = style_plotly(fig_line)
             st.plotly_chart(fig_line, use_container_width=True)
+            
+            # 🤖 AI Analyst Explanation
+            if len(trend_agg) >= 2:
+                first_val = trend_agg[val_col].iloc[0]
+                last_val = trend_agg[val_col].iloc[-1]
+                if last_val > first_val * 1.05: trend_dir = "an upward trend 📈"
+                elif last_val < first_val * 0.95: trend_dir = "a downward trend 📉"
+                else: trend_dir = "a flat/stable trend ➡️"
+                st.info(f"**🤖 AI Analyst:** Over this timeline, `{val_col}` is showing **{trend_dir}**. It moved from {first_val:,.1f} to {last_val:,.1f}.")
             
         with col_t2:
             # Day of Week Seasonality
@@ -530,30 +553,55 @@ with tabs[6]:
     else:
         pm_c1, pm_c2 = st.columns([1, 2])
         with pm_c1:
-            target = st.selectbox("🎯 Target (What to predict)", numeric_cols, key="pm_target")
-            features = st.multiselect("📥 Feature Columns", [c for c in numeric_cols if c != target], default=[c for c in numeric_cols if c != target][:3], key="pm_feats")
-            model_type = st.selectbox("Model", ["Linear Regression", "Random Forest"], key="pm_model")
+            task_type = st.radio("Task Type", ["Regression (Predict Value)", "Classification / Churn (Predict Category)"], key="pm_task")
+            if "Regression" in task_type:
+                target = st.selectbox("🎯 Target (What to predict)", numeric_cols, key="pm_target")
+                algo_opts = ["Linear Regression", "Random Forest Regressor"]
+            else:
+                target = st.selectbox("🎯 Target (What to predict)", categorical_cols, key="pm_target_cls")
+                algo_opts = ["Logistic Regression", "Random Forest Classifier"]
+                
+            features = st.multiselect("📥 Feature Columns", numeric_cols, default=numeric_cols[:min(3, len(numeric_cols))], key="pm_feats")
+            model_type = st.selectbox("Model", algo_opts, key="pm_model")
             test_pct = st.slider("Test Split %", 10, 40, 20, key="pm_split")
             run_model = st.button("▶ Train Model", type="primary", use_container_width=True)
+            
         with pm_c2:
-            if run_model and features:
+            if run_model and features and target:
                 sub = df[features + [target]].dropna()
-                # Encode any remaining categoricals that slipped through
-                for col in sub.select_dtypes(include='object').columns:
-                    sub[col] = LabelEncoder().fit_transform(sub[col].astype(str))
-                X, y = sub[features].values, sub[target].values
-                X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=test_pct/100, random_state=42)
-                mdl = LinearRegression() if model_type == "Linear Regression" else RandomForestRegressor(n_estimators=100, random_state=42)
-                mdl.fit(X_tr, y_tr)
-                preds = mdl.predict(X_te)
-                r2 = r2_score(y_te, preds)
-                mae = mean_absolute_error(y_te, preds)
-                mc1, mc2 = st.columns(2)
-                mc1.markdown(f'<div class="metric-card"><div class="metric-label">R² Score</div><div class="metric-value" style="color:{C_AMBER}">{r2:.3f}</div></div>', unsafe_allow_html=True)
-                mc2.markdown(f'<div class="metric-card"><div class="metric-label">Mean Abs Error</div><div class="metric-value">{mae:,.2f}</div></div>', unsafe_allow_html=True)
-                fig_pred = px.scatter(x=y_te, y=preds, labels={"x": "Actual", "y": "Predicted"}, title="Actual vs Predicted", color_discrete_sequence=[C_AMBER])
-                fig_pred.add_shape(type="line", x0=y_te.min(), y0=y_te.min(), x1=y_te.max(), y1=y_te.max(), line=dict(color=C_GREEN, dash="dash"))
-                st.plotly_chart(style_plotly(fig_pred), use_container_width=True)
+                X = sub[features].values
+                y = sub[target].values
+                
+                if "Regression" in task_type:
+                    X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=test_pct/100, random_state=42)
+                    mdl = LinearRegression() if "Linear" in model_type else RandomForestRegressor(n_estimators=100, random_state=42)
+                    mdl.fit(X_tr, y_tr)
+                    preds = mdl.predict(X_te)
+                    
+                    r2 = r2_score(y_te, preds)
+                    mae = mean_absolute_error(y_te, preds)
+                    mc1, mc2 = st.columns(2)
+                    mc1.markdown(f'<div class="metric-card"><div class="metric-label">R² Score</div><div class="metric-value" style="color:{C_AMBER}">{r2:.3f}</div></div>', unsafe_allow_html=True)
+                    mc2.markdown(f'<div class="metric-card"><div class="metric-label">Mean Abs Error</div><div class="metric-value">{mae:,.2f}</div></div>', unsafe_allow_html=True)
+                    
+                    fig_pred = px.scatter(x=y_te, y=preds, labels={"x": "Actual", "y": "Predicted"}, title="Actual vs Predicted", color_discrete_sequence=[C_AMBER])
+                    fig_pred.add_shape(type="line", x0=y_te.min(), y0=y_te.min(), x1=y_te.max(), y1=y_te.max(), line=dict(color=C_GREEN, dash="dash"))
+                    st.plotly_chart(style_plotly(fig_pred), use_container_width=True)
+                else:
+                    # Classification
+                    le = LabelEncoder()
+                    y_enc = le.fit_transform(y)
+                    X_tr, X_te, y_tr, y_te = train_test_split(X, y_enc, test_size=test_pct/100, random_state=42)
+                    mdl = LogisticRegression(max_iter=1000) if "Logistic" in model_type else RandomForestClassifier(n_estimators=100, random_state=42)
+                    mdl.fit(X_tr, y_tr)
+                    preds = mdl.predict(X_te)
+                    
+                    acc = accuracy_score(y_te, preds)
+                    mc1, mc2 = st.columns(2)
+                    mc1.markdown(f'<div class="metric-card"><div class="metric-label">Accuracy</div><div class="metric-value" style="color:{C_GREEN}">{acc*100:.1f}%</div></div>', unsafe_allow_html=True)
+                    mc2.markdown(f'<div class="metric-card"><div class="metric-label">Classes Predicted</div><div class="metric-value">{len(le.classes_)}</div></div>', unsafe_allow_html=True)
+                    
+                    st.info(f"**🤖 AI Analyst:** The model can predict `{target}` with **{acc*100:.1f}% accuracy** using the selected features. This is highly useful for churn prediction or customer classification.")
                 if model_type == "Random Forest" and features:
                     fi = pd.DataFrame({"Feature": features, "Importance": mdl.feature_importances_}).sort_values("Importance", ascending=True)
                     fig_fi = px.bar(fi, x="Importance", y="Feature", orientation="h", title="Feature Importance", color_discrete_sequence=[C_AMBER])
@@ -829,8 +877,70 @@ with tabs[10]:
             icon = "✅" if passed else "❌"
             st.markdown(f"{icon} {label}")
 
-# ── 11. RAW DATA ─────────────────────────────────────────────────────────────
+# ── 11. AI CHATBOT ───────────────────────────────────────────────────────────
 with tabs[11]:
+    st.markdown('<div class="step-banner">💬 Conversational AI Data Analyst</div>', unsafe_allow_html=True)
+    st.markdown('<div class="explanation-box"><b>Agentic AI:</b> Ask questions about your dataset in plain English. Example: <i>"Which region performed best?"</i>, <i>"Why are profits low?"</i>, or <i>"Summarize customer behavior."</i></div>', unsafe_allow_html=True)
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [{"role": "assistant", "content": "Hi! I am your AI Data Analyst. What would you like to know about your dataset?"}]
+        
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            
+    if prompt := st.chat_input("Ask a question about your data..."):
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+            
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing data..."):
+                prompt_lower = prompt.lower()
+                response = ""
+                
+                # Heuristic 1: Best / Top
+                if "best" in prompt_lower or "top" in prompt_lower or "highest" in prompt_lower:
+                    if categorical_cols and numeric_cols:
+                        cat = categorical_cols[0]
+                        num = numeric_cols[0]
+                        best_val = df.groupby(cat)[num].sum().idxmax()
+                        val = df.groupby(cat)[num].sum().max()
+                        response = f"Based on the data, the top performing `{cat}` is **{best_val}** with a total `{num}` of {val:,.2f}."
+                    else:
+                        response = "I need at least one category and one numeric column to determine the best performer."
+                
+                # Heuristic 2: Worst / Low
+                elif "worst" in prompt_lower or "low" in prompt_lower or "bottom" in prompt_lower:
+                    if categorical_cols and numeric_cols:
+                        cat = categorical_cols[0]
+                        num = numeric_cols[0]
+                        worst_val = df.groupby(cat)[num].sum().idxmin()
+                        val = df.groupby(cat)[num].sum().min()
+                        response = f"The lowest performing `{cat}` is **{worst_val}** with a total `{num}` of {val:,.2f}. You should investigate this segment."
+                    else:
+                        response = "I need at least one category and one numeric column to determine the worst performer."
+                
+                # Heuristic 3: Summarize / Overview
+                elif "summarize" in prompt_lower or "summary" in prompt_lower or "behavior" in prompt_lower:
+                    rows = len(df)
+                    cols = len(df.columns)
+                    missing = df.isna().sum().sum()
+                    response = f"This dataset contains **{rows:,} rows** and **{cols} columns**. "
+                    if missing > 0:
+                        response += f"Be aware there are {missing:,} missing values. "
+                    if numeric_cols:
+                        response += f"The primary numeric metric is `{numeric_cols[0]}` which totals {df[numeric_cols[0]].sum():,.2f}."
+                        
+                # Default / Fallback
+                else:
+                    response = "I'm still analyzing patterns! For now, try asking me things like:\n- *'Which category performed best?'*\n- *'Why are numbers low?'* (Finds worst performers)\n- *'Summarize the data'*."
+                
+                st.markdown(response)
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
+
+# ── 12. RAW DATA ─────────────────────────────────────────────────────────────
+with tabs[12]:
     st.markdown("##### 🔎 Filtered & Cleaned Records")
     st.dataframe(df, use_container_width=True, height=450)
     st.download_button("⬇️ Export to CSV", df.to_csv(index=False).encode("utf-8"), "dataset_export.csv", "text/csv")
