@@ -262,7 +262,6 @@ tabs = st.tabs([
     "💡 Business Insights",
     "⚙️ Automation",
     "🏛️ Governance",
-    "💬 AI Chatbot",
     "📋 Raw Data"
 ])
 
@@ -877,73 +876,67 @@ with tabs[10]:
             icon = "✅" if passed else "❌"
             st.markdown(f"{icon} {label}")
 
-# ── 11. AI CHATBOT ───────────────────────────────────────────────────────────
+# ── 11. RAW DATA ─────────────────────────────────────────────────────────────
 with tabs[11]:
-    st.markdown('<div class="step-banner">💬 Conversational AI Data Analyst</div>', unsafe_allow_html=True)
-    st.markdown('<div class="explanation-box"><b>Agentic AI:</b> Ask questions about your dataset in plain English. Example: <i>"Which region performed best?"</i>, <i>"Why are profits low?"</i>, or <i>"Summarize customer behavior."</i></div>', unsafe_allow_html=True)
-    
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = [{"role": "assistant", "content": "Hi! I am your AI Data Analyst. What would you like to know about your dataset?"}]
-        
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            
-    if prompt := st.chat_input("Ask a question about your data..."):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-            
-        with st.chat_message("assistant"):
-            with st.spinner("Analyzing data..."):
-                prompt_lower = prompt.lower()
-                response = ""
-                
-                # Heuristic 1: Best / Top
-                if "best" in prompt_lower or "top" in prompt_lower or "highest" in prompt_lower:
-                    if categorical_cols and numeric_cols:
-                        cat = categorical_cols[0]
-                        num = numeric_cols[0]
-                        best_val = df.groupby(cat)[num].sum().idxmax()
-                        val = df.groupby(cat)[num].sum().max()
-                        response = f"Based on the data, the top performing `{cat}` is **{best_val}** with a total `{num}` of {val:,.2f}."
-                    else:
-                        response = "I need at least one category and one numeric column to determine the best performer."
-                
-                # Heuristic 2: Worst / Low
-                elif "worst" in prompt_lower or "low" in prompt_lower or "bottom" in prompt_lower:
-                    if categorical_cols and numeric_cols:
-                        cat = categorical_cols[0]
-                        num = numeric_cols[0]
-                        worst_val = df.groupby(cat)[num].sum().idxmin()
-                        val = df.groupby(cat)[num].sum().min()
-                        response = f"The lowest performing `{cat}` is **{worst_val}** with a total `{num}` of {val:,.2f}. You should investigate this segment."
-                    else:
-                        response = "I need at least one category and one numeric column to determine the worst performer."
-                
-                # Heuristic 3: Summarize / Overview
-                elif "summarize" in prompt_lower or "summary" in prompt_lower or "behavior" in prompt_lower:
-                    rows = len(df)
-                    cols = len(df.columns)
-                    missing = df.isna().sum().sum()
-                    response = f"This dataset contains **{rows:,} rows** and **{cols} columns**. "
-                    if missing > 0:
-                        response += f"Be aware there are {missing:,} missing values. "
-                    if numeric_cols:
-                        response += f"The primary numeric metric is `{numeric_cols[0]}` which totals {df[numeric_cols[0]].sum():,.2f}."
-                        
-                # Default / Fallback
-                else:
-                    response = "I'm still analyzing patterns! For now, try asking me things like:\n- *'Which category performed best?'*\n- *'Why are numbers low?'* (Finds worst performers)\n- *'Summarize the data'*."
-                
-                st.markdown(response)
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-
-# ── 12. RAW DATA ─────────────────────────────────────────────────────────────
-with tabs[12]:
     st.markdown("##### 🔎 Filtered & Cleaned Records")
     st.dataframe(df, use_container_width=True, height=450)
     st.download_button("⬇️ Export to CSV", df.to_csv(index=False).encode("utf-8"), "dataset_export.csv", "text/csv")
 
 st.markdown("---")
 st.markdown("<p style='text-align:center;color:#9CA3AF;font-size:13px;'>Data Analytics Dashboard • Built with Streamlit</p>", unsafe_allow_html=True)
+
+# ── SIDEBAR CHATBOT ──────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("### 💬 AI Data Chatbot")
+    st.markdown("<small style='color:#9CA3AF;'>Ask questions about your data in plain English.</small>", unsafe_allow_html=True)
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [{"role": "assistant", "content": "Hi! Ask me anything about your data."}]
+        
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            
+    with st.form("chat_form", clear_on_submit=True):
+        prompt = st.text_input("Ask a question...")
+        submitted = st.form_submit_button("Send")
+        
+    if submitted and prompt:
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        
+        prompt_lower = prompt.lower()
+        response = ""
+        
+        if "best" in prompt_lower or "top" in prompt_lower or "highest" in prompt_lower:
+            if categorical_cols and numeric_cols:
+                cat = categorical_cols[0]
+                num = numeric_cols[0]
+                best_val = df.groupby(cat)[num].sum().idxmax()
+                val = df.groupby(cat)[num].sum().max()
+                response = f"Top `{cat}` is **{best_val}** ({num}: {val:,.2f})."
+            else:
+                response = "Need 1 category & 1 numeric column."
+        
+        elif "worst" in prompt_lower or "low" in prompt_lower or "bottom" in prompt_lower:
+            if categorical_cols and numeric_cols:
+                cat = categorical_cols[0]
+                num = numeric_cols[0]
+                worst_val = df.groupby(cat)[num].sum().idxmin()
+                val = df.groupby(cat)[num].sum().min()
+                response = f"Lowest `{cat}` is **{worst_val}** ({num}: {val:,.2f})."
+            else:
+                response = "Need 1 category & 1 numeric column."
+        
+        elif "summarize" in prompt_lower or "summary" in prompt_lower or "behavior" in prompt_lower:
+            response = f"**{len(df):,} rows**, **{len(df.columns)} columns**. "
+            if df.isna().sum().sum() > 0:
+                response += f"({df.isna().sum().sum():,} missing values). "
+            if numeric_cols:
+                response += f"`{numeric_cols[0]}` totals {df[numeric_cols[0]].sum():,.2f}."
+                
+        else:
+            response = "Try: 'Which is best?', 'Why are numbers low?', or 'Summarize'."
+        
+        st.session_state.chat_history.append({"role": "assistant", "content": response})
+        st.rerun()
