@@ -594,57 +594,130 @@ with tabs[7]:
 # ── 8. BUSINESS INSIGHTS ─────────────────────────────────────────────────────
 with tabs[8]:
     st.markdown('<div class="step-banner">💡 Business Decision Support & Plain-English Insights</div>', unsafe_allow_html=True)
-    st.markdown('<div class="explanation-box"><b>What this does:</b> Automatically reads your data and surfaces actionable business insights in plain English — no technical knowledge required.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="explanation-box"><b>What this does:</b> Automatically analyzes your dataset to surface deep, actionable business insights across performance, risk, segmentation, and key drivers. No technical knowledge required.</div>', unsafe_allow_html=True)
 
-    insights = []
-    if numeric_cols:
-        for col in numeric_cols[:4]:
-            s = df[col].dropna()
-            skew = s.skew()
-            cv = (s.std() / s.mean() * 100) if s.mean() != 0 else 0
-            trend = "📈 upward" if skew < -0.5 else ("📉 downward" if skew > 0.5 else "➡️ balanced")
-            insights.append(f"**{col}**: Mean = `{s.mean():,.2f}`, Variability = `{cv:.1f}%`. Distribution is {trend}. {'⚠️ High variability — investigate outliers.' if cv > 50 else '✅ Stable metric.'} ")
+    if not numeric_cols:
+        st.info("⚠️ Upload data with numeric columns to generate automatic business insights.")
+    else:
+        st.markdown("### 📊 Automated Executive Summary")
+        
+        c_perf, c_risk = st.columns(2)
+        c_seg, c_driv = st.columns(2)
+        
+        # 1. Performance & Trends
+        with c_perf:
+            st.markdown("#### 📈 Performance & Trends")
+            perf_insights = []
+            if date_cols and numeric_cols:
+                time_col = date_cols[0]
+                val_col = numeric_cols[0]
+                temp_df = df.dropna(subset=[time_col, val_col]).copy()
+                if not temp_df.empty:
+                    temp_df.set_index(time_col, inplace=True)
+                    try:
+                        monthly = temp_df[val_col].resample('ME').sum()
+                        if len(monthly) >= 2:
+                            last_month = monthly.iloc[-1]
+                            prev_month = monthly.iloc[-2]
+                            mom = ((last_month - prev_month) / prev_month) * 100 if prev_month != 0 else 0
+                            dir_str = "grew" if mom > 0 else "declined"
+                            perf_insights.append(f"**Month-over-Month**: `{val_col}` {dir_str} by **{abs(mom):.1f}%** in the most recent month (from {prev_month:,.0f} to {last_month:,.0f}).")
+                    except:
+                        pass
+            
+            for col in numeric_cols[:2]:
+                s = df[col].dropna()
+                if len(s) > 0:
+                    perf_insights.append(f"**Baseline Volume**: The average `{col}` per record is **{s.mean():,.2f}** (Median: {s.median():,.2f}). Total accumulated `{col}` is **{s.sum():,.0f}**.")
+            
+            for ins in perf_insights:
+                st.info(ins)
 
-    if len(numeric_cols) > 1:
-        corr_matrix = df[numeric_cols].corr()
-        for i in range(len(numeric_cols)):
-            for j in range(i+1, len(numeric_cols)):
-                r = corr_matrix.iloc[i, j]
-                if abs(r) > 0.7:
-                    dir_ = "positively" if r > 0 else "negatively"
-                    insights.append(f"**Strong link detected**: `{numeric_cols[i]}` and `{numeric_cols[j]}` are {dir_} correlated (r = {r:.2f}). Consider using one to forecast the other.")
+        # 2. Risk Factors & Anomalies
+        with c_risk:
+            st.markdown("#### ⚠️ Risk Factors & Volatility")
+            risk_insights = []
+            for col in numeric_cols[:3]:
+                s = df[col].dropna()
+                if len(s) > 0 and s.mean() != 0:
+                    cv = (s.std() / s.mean()) * 100
+                    if cv > 100:
+                        risk_insights.append(f"**High Volatility in `{col}`**: Variance is extreme (CV = {cv:.0f}%). This indicates highly unpredictable outcomes or severe outliers. **Recommendation**: Investigate extreme highs/lows.")
+                    elif cv < 15:
+                        risk_insights.append(f"**Stable Predictability in `{col}`**: Very low variance (CV = {cv:.0f}%). This metric is highly consistent and safe for baseline forecasting.")
+            
+            missing = df.isna().sum().sum()
+            if missing > 0:
+                risk_insights.append(f"**Data Integrity Risk**: There are **{missing:,}** missing data points across the dataset. This could skew strategic decisions if not cleaned.")
+            
+            if not risk_insights:
+                risk_insights.append("No immediate risk factors or high volatility detected in primary metrics.")
+            
+            for ins in risk_insights:
+                st.warning(ins)
 
-    if categorical_cols and numeric_cols:
-        for cat in categorical_cols[:2]:
-            grp = df.groupby(cat)[numeric_cols[0]].mean()
-            best = grp.idxmax()
-            worst = grp.idxmin()
-            insights.append(f"**Top Performer** in `{cat}`: `{best}` with avg {numeric_cols[0]} = `{grp[best]:,.2f}`. **Lowest**: `{worst}` at `{grp[worst]:,.2f}`. Gap = `{grp[best]-grp[worst]:,.2f}`.")
+        # 3. Segment Analysis
+        with c_seg:
+            st.markdown("#### 🎯 Market Segment Analysis")
+            seg_insights = []
+            if categorical_cols and numeric_cols:
+                main_cat = categorical_cols[0]
+                main_num = numeric_cols[0]
+                grp = df.groupby(main_cat)[main_num].sum().sort_values(ascending=False)
+                if len(grp) > 1:
+                    total = grp.sum()
+                    top_cat = grp.index[0]
+                    top_share = (grp.iloc[0] / total) * 100 if total > 0 else 0
+                    bottom_cat = grp.index[-1]
+                    seg_insights.append(f"**Market Leader**: `{top_cat}` dominates the `{main_cat}` category, contributing **{top_share:.1f}%** of total `{main_num}`.")
+                    seg_insights.append(f"**Underperformer**: `{bottom_cat}` generated the lowest total `{main_num}` ({grp.iloc[-1]:,.2f}). **Recommendation**: Consider reallocating resources or investigating root causes for this segment.")
+            
+            if not seg_insights:
+                seg_insights.append("Not enough categorical data to perform segment analysis.")
+                
+            for ins in seg_insights:
+                st.success(ins)
 
-    if not insights:
-        insights.append("Upload data to generate automatic business insights.")
+        # 4. Key Drivers & Correlations
+        with c_driv:
+            st.markdown("#### 🔗 Key Business Drivers")
+            driver_insights = []
+            if len(numeric_cols) > 1:
+                corr_matrix = df[numeric_cols].corr()
+                found_strong = False
+                for i in range(len(numeric_cols)):
+                    for j in range(i+1, len(numeric_cols)):
+                        r = corr_matrix.iloc[i, j]
+                        if abs(r) > 0.65:
+                            found_strong = True
+                            dir_ = "strongly boosts" if r > 0 else "strongly suppresses"
+                            impact = "positive" if r > 0 else "negative"
+                            driver_insights.append(f"**Strategic Lever**: An increase in `{numeric_cols[i]}` {dir_} `{numeric_cols[j]}` (Correlation: {r:.2f}). These two move in a {impact} lockstep.")
+                if not found_strong:
+                    driver_insights.append("No strong linear relationships found between numeric metrics. Performance drivers may be non-linear or driven by external factors.")
+            else:
+                driver_insights.append("Need multiple numeric columns to find business drivers.")
+                
+            for ins in driver_insights:
+                st.info(ins)
 
-    for i, ins in enumerate(insights):
-        st.markdown(f"""
-        <div class="explanation-box" style="border-left: 4px solid {C_AMBER}; padding-left: 16px;">
-        <b>Insight {i+1}:</b> {ins}
-        </div>""", unsafe_allow_html=True)
-
-    # Recommendation section
-    st.markdown("---")
-    st.markdown("##### 📋 Strategic Recommendations")
-    recs = []
-    if df.isna().sum().sum() > 0:
-        recs.append("🔧 **Data Quality**: Missing values detected — clean data before sharing with stakeholders.")
-    if len(numeric_cols) >= 2:
-        recs.append("📊 **Forecasting**: Sufficient numeric data to build a sales or demand prediction model (see Predictive Models tab).")
-    if date_cols:
-        recs.append("📅 **Seasonality**: Date columns found — use Time Intel tab to detect seasonal trends for planning cycles.")
-    if categorical_cols:
-        recs.append("🎯 **Segmentation**: Use Deep Dive tab to identify top-performing segments for targeted strategy.")
-    recs.append("📤 **Reporting**: Export cleaned data and share charts with your marketing, finance, or product teams.")
-    for r in recs:
-        st.markdown(f"- {r}")
+        # ── Data-Driven Strategic Recommendations ──
+        st.markdown("---")
+        st.markdown("### 📋 Executive Action Plan")
+        st.markdown("<small style='color:#9CA3AF;'>Based on the mathematical realities of your dataset, here are the recommended next steps:</small>", unsafe_allow_html=True)
+        
+        recs = []
+        if date_cols and numeric_cols:
+            recs.append(f"**Implement Trend Forecasting**: Your data contains time-series history. Move to the **Time Intel** tab to isolate seasonal peaks and valleys for `{numeric_cols[0]}` to optimize inventory/staffing schedules.")
+        if len(numeric_cols) >= 2:
+            recs.append(f"**Predict Future Outcomes**: You have enough quantitative data to build an AI model. Use the **Predictive Models** tab to predict `{numeric_cols[0]}` based on other variables to proactively manage KPIs.")
+        if categorical_cols:
+            recs.append(f"**A/B Test Your Segments**: You have `{len(categorical_cols)}` categories. If you recently changed strategies in any of these segments, use the **A/B Testing** tab to mathematically prove if the change was successful.")
+        if df.duplicated().sum() > 0:
+            recs.append(f"**Immediate Data Cleanup**: {df.duplicated().sum()} duplicate records exist. Navigate to **Data Cleaning** immediately to prevent double-counting revenue/costs.")
+        
+        for idx, r in enumerate(recs, 1):
+            st.markdown(f"{idx}. {r}")
 
 # ── 9. AUTOMATION ────────────────────────────────────────────────────────────
 with tabs[9]:
