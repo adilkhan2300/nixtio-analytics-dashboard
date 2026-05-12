@@ -10,9 +10,22 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import tempfile
-import warnings
+import tempfile, warnings, io, datetime
 warnings.filterwarnings("ignore")
+try:
+    from sklearn.linear_model import LinearRegression
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import r2_score, mean_absolute_error
+    from sklearn.preprocessing import LabelEncoder
+    SKLEARN_OK = True
+except ImportError:
+    SKLEARN_OK = False
+try:
+    from scipy import stats as scipy_stats
+    SCIPY_OK = True
+except ImportError:
+    SCIPY_OK = False
 
 # ─── Page config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -217,11 +230,16 @@ categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).colu
 # ═══════════════════════════════════════════════════════════════════════════
 tabs = st.tabs([
     "🧹 Data Cleaning",
-    "📈 Overview", 
-    "📦 Distributions", 
-    "🔄 Correlations", 
-    "📅 Time Intel", 
-    "🎯 Deep Dive", 
+    "📈 Overview",
+    "📦 Distributions",
+    "🔄 Correlations",
+    "📅 Time Intel",
+    "🎯 Deep Dive",
+    "🤖 Predictive Models",
+    "🧪 A/B Testing",
+    "💡 Business Insights",
+    "⚙️ Automation",
+    "🏛️ Governance",
     "📋 Raw Data"
 ])
 
@@ -480,8 +498,244 @@ with tabs[5]:
     else:
         st.info("Need at least 2 categorical columns and 1 numeric column for Advanced Cross-Analysis.")
 
-# ── 6. RAW DATA ─────────────────────────────────────────────────────────────
+# ── 6. PREDICTIVE MODELS ─────────────────────────────────────────────────────
 with tabs[6]:
+    st.markdown('<div class="step-banner">🤖 Predictive Modelling Engine</div>', unsafe_allow_html=True)
+    if not SKLEARN_OK:
+        st.error("Install scikit-learn: `pip install scikit-learn`")
+    elif len(numeric_cols) < 2:
+        st.info("Need at least 2 numeric columns to build a model.")
+    else:
+        pm_c1, pm_c2 = st.columns([1, 2])
+        with pm_c1:
+            target = st.selectbox("🎯 Target (What to predict)", numeric_cols, key="pm_target")
+            features = st.multiselect("📥 Feature Columns", [c for c in numeric_cols if c != target], default=[c for c in numeric_cols if c != target][:3], key="pm_feats")
+            model_type = st.selectbox("Model", ["Linear Regression", "Random Forest"], key="pm_model")
+            test_pct = st.slider("Test Split %", 10, 40, 20, key="pm_split")
+            run_model = st.button("▶ Train Model", type="primary", use_container_width=True)
+        with pm_c2:
+            if run_model and features:
+                sub = df[features + [target]].dropna()
+                # Encode any remaining categoricals that slipped through
+                for col in sub.select_dtypes(include='object').columns:
+                    sub[col] = LabelEncoder().fit_transform(sub[col].astype(str))
+                X, y = sub[features].values, sub[target].values
+                X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=test_pct/100, random_state=42)
+                mdl = LinearRegression() if model_type == "Linear Regression" else RandomForestRegressor(n_estimators=100, random_state=42)
+                mdl.fit(X_tr, y_tr)
+                preds = mdl.predict(X_te)
+                r2 = r2_score(y_te, preds)
+                mae = mean_absolute_error(y_te, preds)
+                mc1, mc2 = st.columns(2)
+                mc1.markdown(f'<div class="metric-card"><div class="metric-label">R² Score</div><div class="metric-value" style="color:{C_AMBER}">{r2:.3f}</div></div>', unsafe_allow_html=True)
+                mc2.markdown(f'<div class="metric-card"><div class="metric-label">Mean Abs Error</div><div class="metric-value">{mae:,.2f}</div></div>', unsafe_allow_html=True)
+                fig_pred = px.scatter(x=y_te, y=preds, labels={"x": "Actual", "y": "Predicted"}, title="Actual vs Predicted", color_discrete_sequence=[C_AMBER])
+                fig_pred.add_shape(type="line", x0=y_te.min(), y0=y_te.min(), x1=y_te.max(), y1=y_te.max(), line=dict(color=C_GREEN, dash="dash"))
+                st.plotly_chart(style_plotly(fig_pred), use_container_width=True)
+                if model_type == "Random Forest" and features:
+                    fi = pd.DataFrame({"Feature": features, "Importance": mdl.feature_importances_}).sort_values("Importance", ascending=True)
+                    fig_fi = px.bar(fi, x="Importance", y="Feature", orientation="h", title="Feature Importance", color_discrete_sequence=[C_AMBER])
+                    st.plotly_chart(style_plotly(fig_fi), use_container_width=True)
+
+# ── 7. A/B TESTING ───────────────────────────────────────────────────────────
+with tabs[7]:
+    st.markdown('<div class="step-banner">🧪 Experimentation & A/B Testing</div>', unsafe_allow_html=True)
+    if not SCIPY_OK:
+        st.error("Install scipy: `pip install scipy`")
+    elif not categorical_cols or not numeric_cols:
+        st.info("Need at least 1 categorical and 1 numeric column for A/B testing.")
+    else:
+        ab_c1, ab_c2 = st.columns([1, 2])
+        with ab_c1:
+            grp_col = st.selectbox("Group Column (A/B)", categorical_cols, key="ab_grp")
+            metric_col = st.selectbox("Metric to Compare", numeric_cols, key="ab_metric")
+            groups = df[grp_col].dropna().unique().tolist()
+            grp_a = st.selectbox("Group A", groups, index=0, key="ab_ga")
+            grp_b = st.selectbox("Group B", groups, index=min(1, len(groups)-1), key="ab_gb")
+            conf = st.slider("Confidence Level", 0.90, 0.99, 0.95, step=0.01, key="ab_conf")
+            run_ab = st.button("▶ Run Test", type="primary", use_container_width=True)
+        with ab_c2:
+            if run_ab and grp_a != grp_b:
+                a_data = df[df[grp_col] == grp_a][metric_col].dropna()
+                b_data = df[df[grp_col] == grp_b][metric_col].dropna()
+                t_stat, p_val = scipy_stats.ttest_ind(a_data, b_data)
+                sig = p_val < (1 - conf)
+                lift = ((b_data.mean() - a_data.mean()) / a_data.mean() * 100) if a_data.mean() != 0 else 0
+                r1, r2, r3 = st.columns(3)
+                r1.markdown(f'<div class="metric-card"><div class="metric-label">p-value</div><div class="metric-value" style="color:{C_GREEN if sig else C_GRAY_DARK}">{p_val:.4f}</div></div>', unsafe_allow_html=True)
+                r2.markdown(f'<div class="metric-card"><div class="metric-label">Lift (B vs A)</div><div class="metric-value" style="color:{C_GREEN if lift>0 else "#F43F5E"}">{lift:+.1f}%</div></div>', unsafe_allow_html=True)
+                r3.markdown(f'<div class="metric-card"><div class="metric-label">Result</div><div class="metric-value" style="font-size:18px;color:{C_GREEN if sig else C_GRAY_DARK}">{ "✅ Significant" if sig else "❌ Not Significant"}</div></div>', unsafe_allow_html=True)
+                ab_plot = pd.DataFrame({"Value": list(a_data) + list(b_data), "Group": [grp_a]*len(a_data) + [grp_b]*len(b_data)})
+                fig_ab = px.histogram(ab_plot, x="Value", color="Group", barmode="overlay", opacity=0.7, color_discrete_sequence=[C_AMBER, C_GREEN], title=f"Distribution: {grp_a} vs {grp_b}")
+                st.plotly_chart(style_plotly(fig_ab), use_container_width=True)
+
+# ── 8. BUSINESS INSIGHTS ─────────────────────────────────────────────────────
+with tabs[8]:
+    st.markdown('<div class="step-banner">💡 Business Decision Support & Plain-English Insights</div>', unsafe_allow_html=True)
+    st.markdown('<div class="explanation-box"><b>What this does:</b> Automatically reads your data and surfaces actionable business insights in plain English — no technical knowledge required.</div>', unsafe_allow_html=True)
+
+    insights = []
+    if numeric_cols:
+        for col in numeric_cols[:4]:
+            s = df[col].dropna()
+            skew = s.skew()
+            cv = (s.std() / s.mean() * 100) if s.mean() != 0 else 0
+            trend = "📈 upward" if skew < -0.5 else ("📉 downward" if skew > 0.5 else "➡️ balanced")
+            insights.append(f"**{col}**: Mean = `{s.mean():,.2f}`, Variability = `{cv:.1f}%`. Distribution is {trend}. {'⚠️ High variability — investigate outliers.' if cv > 50 else '✅ Stable metric.'} ")
+
+    if len(numeric_cols) > 1:
+        corr_matrix = df[numeric_cols].corr()
+        for i in range(len(numeric_cols)):
+            for j in range(i+1, len(numeric_cols)):
+                r = corr_matrix.iloc[i, j]
+                if abs(r) > 0.7:
+                    dir_ = "positively" if r > 0 else "negatively"
+                    insights.append(f"**Strong link detected**: `{numeric_cols[i]}` and `{numeric_cols[j]}` are {dir_} correlated (r = {r:.2f}). Consider using one to forecast the other.")
+
+    if categorical_cols and numeric_cols:
+        for cat in categorical_cols[:2]:
+            grp = df.groupby(cat)[numeric_cols[0]].mean()
+            best = grp.idxmax()
+            worst = grp.idxmin()
+            insights.append(f"**Top Performer** in `{cat}`: `{best}` with avg {numeric_cols[0]} = `{grp[best]:,.2f}`. **Lowest**: `{worst}` at `{grp[worst]:,.2f}`. Gap = `{grp[best]-grp[worst]:,.2f}`.")
+
+    if not insights:
+        insights.append("Upload data to generate automatic business insights.")
+
+    for i, ins in enumerate(insights):
+        st.markdown(f"""
+        <div class="explanation-box" style="border-left: 4px solid {C_AMBER}; padding-left: 16px;">
+        <b>Insight {i+1}:</b> {ins}
+        </div>""", unsafe_allow_html=True)
+
+    # Recommendation section
+    st.markdown("---")
+    st.markdown("##### 📋 Strategic Recommendations")
+    recs = []
+    if df.isna().sum().sum() > 0:
+        recs.append("🔧 **Data Quality**: Missing values detected — clean data before sharing with stakeholders.")
+    if len(numeric_cols) >= 2:
+        recs.append("📊 **Forecasting**: Sufficient numeric data to build a sales or demand prediction model (see Predictive Models tab).")
+    if date_cols:
+        recs.append("📅 **Seasonality**: Date columns found — use Time Intel tab to detect seasonal trends for planning cycles.")
+    if categorical_cols:
+        recs.append("🎯 **Segmentation**: Use Deep Dive tab to identify top-performing segments for targeted strategy.")
+    recs.append("📤 **Reporting**: Export cleaned data and share charts with your marketing, finance, or product teams.")
+    for r in recs:
+        st.markdown(f"- {r}")
+
+# ── 9. AUTOMATION ────────────────────────────────────────────────────────────
+with tabs[9]:
+    st.markdown('<div class="step-banner">⚙️ Automation & Report Generation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="explanation-box"><b>What this does:</b> Auto-generates a ready-to-share text report and provides reusable Python scripts to automate your data workflow.</div>', unsafe_allow_html=True)
+
+    aut_c1, aut_c2 = st.columns(2)
+    with aut_c1:
+        st.markdown("##### 📝 Auto-Generate Report")
+        report_title = st.text_input("Report Title", value="Data Analytics Report", key="rpt_title")
+        analyst_name = st.text_input("Analyst Name", value="Analytics Team", key="rpt_analyst")
+        if st.button("📄 Generate Text Report", type="primary", use_container_width=True):
+            lines = [
+                f"# {report_title}",
+                f"Prepared by: {analyst_name}",
+                f"Date: {datetime.date.today()}",
+                f"Dataset Shape: {df.shape[0]:,} rows × {df.shape[1]} columns",
+                "",
+                "## Summary Statistics",
+            ]
+            for col in numeric_cols[:5]:
+                s = df[col].dropna()
+                lines.append(f"- **{col}**: Mean={s.mean():,.2f}, Median={s.median():,.2f}, Std={s.std():,.2f}, Min={s.min():,.2f}, Max={s.max():,.2f}")
+            lines += ["", "## Data Quality",
+                f"- Missing values: {df.isna().sum().sum():,}",
+                f"- Duplicate rows: {df.duplicated().sum():,}",
+                "", "## Key Observations"]
+            if categorical_cols and numeric_cols:
+                grp = df.groupby(categorical_cols[0])[numeric_cols[0]].sum().sort_values(ascending=False)
+                lines.append(f"- Top {categorical_cols[0]}: **{grp.index[0]}** ({grp.iloc[0]:,.2f})")
+            report_text = "\n".join(lines)
+            st.download_button("⬇️ Download Report (.txt)", report_text.encode(), f"{report_title.replace(' ','_')}.txt", "text/plain", use_container_width=True)
+            st.code(report_text, language="markdown")
+
+    with aut_c2:
+        st.markdown("##### 🐍 Auto-Generated Python Script")
+        st.markdown("<small style='color:#9CA3AF;'>Copy this script to automate your analysis pipeline.</small>", unsafe_allow_html=True)
+        script = f"""import pandas as pd
+import numpy as np
+
+# ── Load Data ──────────────────────────────────────
+df = pd.read_excel('your_file.xlsx')  # or pd.read_csv()
+
+# ── Clean Data ─────────────────────────────────────
+df.drop_duplicates(inplace=True)
+df.dropna(how='all', axis=1, inplace=True)
+for col in df.select_dtypes(include=np.number).columns:
+    df[col].fillna(df[col].median(), inplace=True)
+for col in df.select_dtypes(include='object').columns:
+    df[col].fillna('Unknown', inplace=True)
+    df[col] = df[col].str.strip()
+
+# ── Summary Stats ──────────────────────────────────
+print(df.describe())
+
+# ── Numeric Columns: {', '.join(numeric_cols[:4])} ──
+# ── Categorical Cols: {', '.join(categorical_cols[:4])} ──
+
+print('Shape:', df.shape)
+print('Missing:', df.isna().sum().sum())
+"""
+        st.code(script, language="python")
+        st.download_button("⬇️ Download Script (.py)", script.encode(), "auto_analysis.py", "text/x-python", use_container_width=True)
+
+# ── 10. GOVERNANCE ───────────────────────────────────────────────────────────
+with tabs[10]:
+    st.markdown('<div class="step-banner">🏛️ Data Governance, Quality & Strategy</div>', unsafe_allow_html=True)
+    st.markdown('<div class="explanation-box"><b>What this does:</b> Provides a full data quality audit, schema documentation, and strategic data health score to maintain governance standards.</div>', unsafe_allow_html=True)
+
+    gov_c1, gov_c2 = st.columns(2)
+    with gov_c1:
+        st.markdown("##### 🔍 Data Quality Audit")
+        audit_rows = []
+        for col in df.columns:
+            miss = df[col].isna().sum()
+            miss_pct = miss / len(df) * 100
+            uniq = df[col].nunique()
+            dtype = str(df[col].dtype)
+            status = "🔴 Critical" if miss_pct > 20 else ("🟡 Warning" if miss_pct > 5 else "🟢 Good")
+            audit_rows.append({"Column": col, "Type": dtype, "Missing": f"{miss} ({miss_pct:.1f}%)", "Unique Values": uniq, "Quality": status})
+        audit_df = pd.DataFrame(audit_rows)
+        st.dataframe(audit_df, use_container_width=True, height=300)
+
+        # Health Score
+        total_cells = df.shape[0] * df.shape[1]
+        missing_cells = df.isna().sum().sum()
+        dup_rows = df.duplicated().sum()
+        health = max(0, 100 - (missing_cells / total_cells * 60) - (dup_rows / len(df) * 40))
+        color = C_GREEN if health > 75 else (C_AMBER if health > 50 else "#F43F5E")
+        st.markdown(f'<div class="metric-card" style="text-align:center;"><div class="metric-label">Overall Data Health Score</div><div class="metric-value" style="color:{color};font-size:48px;">{health:.0f}/100</div></div>', unsafe_allow_html=True)
+
+    with gov_c2:
+        st.markdown("##### 📖 Data Dictionary / Schema")
+        schema = []
+        for col in df.columns:
+            sample = df[col].dropna().head(3).tolist()
+            schema.append({"Column": col, "Data Type": str(df[col].dtype), "Sample Values": ", ".join(str(s) for s in sample), "Null Count": int(df[col].isna().sum())})
+        st.dataframe(pd.DataFrame(schema), use_container_width=True, height=300)
+
+        st.markdown("##### 🛡️ Governance Checklist")
+        checks = [
+            (df.isna().sum().sum() == 0, "No missing values in dataset"),
+            (df.duplicated().sum() == 0, "No duplicate rows"),
+            (len(numeric_cols) > 0, "Numeric columns present and usable"),
+            (len(date_cols) > 0, "Date columns available for time analysis"),
+            (len(df) >= 30, "Sufficient sample size (≥30 rows)"),
+        ]
+        for passed, label in checks:
+            icon = "✅" if passed else "❌"
+            st.markdown(f"{icon} {label}")
+
+# ── 11. RAW DATA ─────────────────────────────────────────────────────────────
+with tabs[11]:
     st.markdown("##### 🔎 Filtered & Cleaned Records")
     st.dataframe(df, use_container_width=True, height=450)
     st.download_button("⬇️ Export to CSV", df.to_csv(index=False).encode("utf-8"), "dataset_export.csv", "text/csv")
