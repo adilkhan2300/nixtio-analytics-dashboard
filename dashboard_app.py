@@ -26,6 +26,11 @@ try:
     SCIPY_OK = True
 except ImportError:
     SCIPY_OK = False
+try:
+    from openai import OpenAI
+    OPENAI_OK = True
+except ImportError:
+    OPENAI_OK = False
 
 # ─── Page config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -890,13 +895,15 @@ st.markdown("<p style='text-align:center;color:#9CA3AF;font-size:13px;'>Data Ana
 # ── RIGHT SIDEBAR CHATBOT ────────────────────────────────────────────────────
 with chat_col:
     st.markdown("### 💬 AI Chatbot")
-    st.markdown("<small style='color:#9CA3AF;'>Ask questions about your data in plain English.</small>", unsafe_allow_html=True)
+    st.markdown("<small style='color:#9CA3AF;'>Ask ChatGPT questions about your data!</small>", unsafe_allow_html=True)
+    
+    api_key = st.text_input("OpenAI API Key", type="password", key="openai_key", help="Enter your OpenAI API key to enable ChatGPT.")
     
     # Create a scrollable container for chat history
-    chat_container = st.container(height=600)
+    chat_container = st.container(height=500)
     
     if "chat_history" not in st.session_state:
-        st.session_state.chat_history = [{"role": "assistant", "content": "Hi! Ask me anything about your data."}]
+        st.session_state.chat_history = [{"role": "assistant", "content": "Hi! Enter your OpenAI API key above and ask me anything about your dataset!"}]
         
     with chat_container:
         for msg in st.session_state.chat_history:
@@ -909,38 +916,41 @@ with chat_col:
             with st.chat_message("user"):
                 st.markdown(prompt)
         
-        prompt_lower = prompt.lower()
-        response = ""
-        
-        if "best" in prompt_lower or "top" in prompt_lower or "highest" in prompt_lower:
-            if categorical_cols and numeric_cols:
-                cat = categorical_cols[0]
-                num = numeric_cols[0]
-                best_val = df.groupby(cat)[num].sum().idxmax()
-                val = df.groupby(cat)[num].sum().max()
-                response = f"Top `{cat}` is **{best_val}** ({num}: {val:,.2f})."
-            else:
-                response = "Need 1 category & 1 numeric column."
-        
-        elif "worst" in prompt_lower or "low" in prompt_lower or "bottom" in prompt_lower:
-            if categorical_cols and numeric_cols:
-                cat = categorical_cols[0]
-                num = numeric_cols[0]
-                worst_val = df.groupby(cat)[num].sum().idxmin()
-                val = df.groupby(cat)[num].sum().min()
-                response = f"Lowest `{cat}` is **{worst_val}** ({num}: {val:,.2f})."
-            else:
-                response = "Need 1 category & 1 numeric column."
-        
-        elif "summarize" in prompt_lower or "summary" in prompt_lower or "behavior" in prompt_lower:
-            response = f"**{len(df):,} rows**, **{len(df.columns)} columns**. "
-            if df.isna().sum().sum() > 0:
-                response += f"({df.isna().sum().sum():,} missing values). "
-            if numeric_cols:
-                response += f"`{numeric_cols[0]}` totals {df[numeric_cols[0]].sum():,.2f}."
+        if api_key and OPENAI_OK:
+            try:
+                client = OpenAI(api_key=api_key)
                 
+                # Context building for ChatGPT
+                context = f"You are an expert Data Analyst. Answer the user's questions based on this dataset summary:\n"
+                context += f"Total Rows: {len(df)}, Columns: {len(df.columns)}\n"
+                context += f"Column Types:\n{df.dtypes.to_string()}\n\n"
+                context += f"Sample Data:\n{df.head(3).to_string()}\n\n"
+                if numeric_cols:
+                    context += f"Numeric Summary:\n{df[numeric_cols].describe().T[['mean','min','max']].to_string()}\n"
+                    
+                messages = [{"role": "system", "content": context}]
+                
+                # Add conversation history
+                for msg in st.session_state.chat_history[1:-1]:
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+                    
+                # Add current prompt
+                messages.append({"role": "user", "content": prompt})
+                
+                with st.spinner("ChatGPT is thinking..."):
+                    res = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=messages,
+                        temperature=0.3
+                    )
+                    response = res.choices[0].message.content
+            except Exception as e:
+                response = f"❌ OpenAI Error: {str(e)}"
         else:
-            response = "Try: 'Which is best?', 'Why are numbers low?', or 'Summarize'."
+            if not OPENAI_OK:
+                response = "The `openai` Python package is not installed. Add it to requirements.txt."
+            else:
+                response = "⚠️ Please enter your OpenAI API key above to use the ChatGPT integration."
         
         st.session_state.chat_history.append({"role": "assistant", "content": response})
         with chat_container:
