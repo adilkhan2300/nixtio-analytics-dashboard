@@ -251,22 +251,15 @@ categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).colu
 # ANALYTICS ENGINE TABS
 # ═══════════════════════════════════════════════════════════════════════════
 tabs = st.tabs([
-    "🧹 Data Cleaning",
-    "📈 Overview",
-    "📦 Distributions",
-    "🔄 Correlations",
-    "📅 Time Intel",
-    "🎯 Deep Dive",
-    "🤖 Predictive Models",
-    "🧪 A/B Testing",
-    "💡 Business Insights",
-    "⚙️ Automation",
-    "🏛️ Governance",
-    "📋 Raw Data"
+    "🏠 Executive Overview",
+    "🔍 Data Explorer",
+    "🧠 Advanced Analytics",
+    "💼 Business Intelligence",
+    "⚙️ Data Management"
 ])
 
-# ── 0. DATA CLEANING ────────────────────────────────────────────────────────
-with tabs[0]:
+# ── DATA CLEANING (Management) ──────────────────────────────────────────────
+with tabs[4]:
     st.markdown('<div class="step-banner">Autonomous Data Preparation</div>', unsafe_allow_html=True)
     st.markdown("<small style='color:#9CA3AF;'>Use the autonomous engine to instantly clean messy data, or manually apply specific operations.</small>", unsafe_allow_html=True)
     
@@ -349,17 +342,17 @@ if not numeric_cols:
     st.warning("⚠️ No numeric columns remaining. Advanced analytics require at least one numeric value. Try adjusting 'Skip Rows' if headers are lower.")
     st.stop()
 
-# ── 1. OVERVIEW ─────────────────────────────────────────────────────────────
-with tabs[1]:
+# ── OVERVIEW (Executive) ────────────────────────────────────────────────────
+with tabs[0]:
     st.markdown('<div class="step-banner">Dataset Profiling & Composition</div>', unsafe_allow_html=True)
     
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="metric-card"><div class="metric-label">Total Rows</div><div class="metric-value">{len(df):,}</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="metric-card"><div class="metric-label">Total Columns</div><div class="metric-value">{len(df.columns)}</div></div>', unsafe_allow_html=True)
+    c1.metric("Total Rows", f"{len(df):,}")
+    c2.metric("Total Columns", f"{len(df.columns)}")
     if len(numeric_cols) >= 1:
-        c3.markdown(f'<div class="metric-card"><div class="metric-label">Sum of {numeric_cols[0]}</div><div class="metric-value">{df[numeric_cols[0]].sum():,.1f}</div></div>', unsafe_allow_html=True)
+        c3.metric(f"Sum of {numeric_cols[0]}", f"{df[numeric_cols[0]].sum():,.1f}")
     if len(numeric_cols) >= 2:
-        c4.markdown(f'<div class="metric-card"><div class="metric-label">Avg of {numeric_cols[1]}</div><div class="metric-value">{df[numeric_cols[1]].mean():,.1f}</div></div>', unsafe_allow_html=True)
+        c4.metric(f"Avg of {numeric_cols[1]}", f"{df[numeric_cols[1]].mean():,.1f}")
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -381,8 +374,8 @@ with tabs[1]:
             top_cat_pct = (counts.iloc[0]['Count'] / counts['Count'].sum()) * 100
             st.info(f"**🤖 AI Analyst:** `{top_cat_name}` is the dominant category here, representing **{top_cat_pct:.1f}%** of the top 10 segments shown. Strategies should heavily prioritize this segment.")
 
-# ── 2. DISTRIBUTIONS ────────────────────────────────────────────────────────
-with tabs[2]:
+# ── DISTRIBUTIONS (Explorer) ──────────────────────────────────────────────────
+with tabs[1]:
     st.markdown('<div class="step-banner">Data Shape & Outliers</div>', unsafe_allow_html=True)
     
     if numeric_cols:
@@ -417,8 +410,9 @@ with tabs[2]:
             fig_box.update_layout(showlegend=False)
             st.plotly_chart(fig_box, use_container_width=True)
 
-# ── 3. CORRELATIONS ─────────────────────────────────────────────────────────
-with tabs[3]:
+# ── CORRELATIONS (Explorer) ───────────────────────────────────────────────────
+with tabs[1]:
+    st.markdown("---")
     st.markdown('<div class="step-banner">Relationships & Drivers</div>', unsafe_allow_html=True)
     
     col_a, col_b = st.columns([1, 1.5])
@@ -451,8 +445,9 @@ with tabs[3]:
             fig_scat = style_plotly(fig_scat)
             st.plotly_chart(fig_scat, use_container_width=True)
 
-# ── 4. TIME INTELLIGENCE ────────────────────────────────────────────────────
-with tabs[4]:
+# ── TIME INTELLIGENCE (Explorer) ──────────────────────────────────────────────
+with tabs[1]:
+    st.markdown("---")
     st.markdown('<div class="step-banner">Time Series & Seasonality</div>', unsafe_allow_html=True)
     
     if date_cols:
@@ -495,8 +490,9 @@ with tabs[4]:
     else:
         st.info("⚠️ No Date/Time columns detected in the dataset. Time intelligence is disabled.")
 
-# ── 5. DEEP DIVE (Pareto & Crosstab) ────────────────────────────────────────
-with tabs[5]:
+# ── DEEP DIVE (Explorer) ────────────────────────────────────────────────────
+with tabs[1]:
+    st.markdown("---")
     st.markdown('<div class="step-banner">Advanced Segment Cross-Analysis</div>', unsafe_allow_html=True)
     
     if len(categorical_cols) >= 2 and numeric_cols:
@@ -542,8 +538,8 @@ with tabs[5]:
     else:
         st.info("Need at least 2 categorical columns and 1 numeric column for Advanced Cross-Analysis.")
 
-# ── 6. PREDICTIVE MODELS ─────────────────────────────────────────────────────
-with tabs[6]:
+# ── PREDICTIVE MODELS (Advanced Analytics) ──────────────────────────────────
+with tabs[2]:
     st.markdown('<div class="step-banner">🤖 Predictive Modelling Engine</div>', unsafe_allow_html=True)
     if not SKLEARN_OK:
         st.error("Install scikit-learn: `pip install scikit-learn`")
@@ -580,8 +576,8 @@ with tabs[6]:
                     r2 = r2_score(y_te, preds)
                     mae = mean_absolute_error(y_te, preds)
                     mc1, mc2 = st.columns(2)
-                    mc1.markdown(f'<div class="metric-card"><div class="metric-label">R² Score</div><div class="metric-value" style="color:{C_AMBER}">{r2:.3f}</div></div>', unsafe_allow_html=True)
-                    mc2.markdown(f'<div class="metric-card"><div class="metric-label">Mean Abs Error</div><div class="metric-value">{mae:,.2f}</div></div>', unsafe_allow_html=True)
+                    mc1.metric("R² Score", f"{r2:.3f}")
+                    mc2.metric("Mean Abs Error", f"{mae:,.2f}")
                     
                     fig_pred = px.scatter(x=y_te, y=preds, labels={"x": "Actual", "y": "Predicted"}, title="Actual vs Predicted", color_discrete_sequence=[C_AMBER])
                     fig_pred.add_shape(type="line", x0=y_te.min(), y0=y_te.min(), x1=y_te.max(), y1=y_te.max(), line=dict(color=C_GREEN, dash="dash"))
@@ -597,8 +593,8 @@ with tabs[6]:
                     
                     acc = accuracy_score(y_te, preds)
                     mc1, mc2 = st.columns(2)
-                    mc1.markdown(f'<div class="metric-card"><div class="metric-label">Accuracy</div><div class="metric-value" style="color:{C_GREEN}">{acc*100:.1f}%</div></div>', unsafe_allow_html=True)
-                    mc2.markdown(f'<div class="metric-card"><div class="metric-label">Classes Predicted</div><div class="metric-value">{len(le.classes_)}</div></div>', unsafe_allow_html=True)
+                    mc1.metric("Accuracy", f"{acc*100:.1f}%")
+                    mc2.metric("Classes Predicted", f"{len(le.classes_)}")
                     
                     st.info(f"**🤖 AI Analyst:** The model can predict `{target}` with **{acc*100:.1f}% accuracy** using the selected features. This is highly useful for churn prediction or customer classification.")
                 if model_type == "Random Forest" and features:
@@ -606,8 +602,9 @@ with tabs[6]:
                     fig_fi = px.bar(fi, x="Importance", y="Feature", orientation="h", title="Feature Importance", color_discrete_sequence=[C_AMBER])
                     st.plotly_chart(style_plotly(fig_fi), use_container_width=True)
 
-# ── 7. A/B TESTING ───────────────────────────────────────────────────────────
-with tabs[7]:
+# ── A/B TESTING (Advanced Analytics) ────────────────────────────────────────
+with tabs[2]:
+    st.markdown("---")
     st.markdown('<div class="step-banner">🧪 Experimentation & A/B Testing</div>', unsafe_allow_html=True)
     if not SCIPY_OK:
         st.error("Install scipy: `pip install scipy`")
@@ -631,15 +628,15 @@ with tabs[7]:
                 sig = p_val < (1 - conf)
                 lift = ((b_data.mean() - a_data.mean()) / a_data.mean() * 100) if a_data.mean() != 0 else 0
                 r1, r2, r3 = st.columns(3)
-                r1.markdown(f'<div class="metric-card"><div class="metric-label">p-value</div><div class="metric-value" style="color:{C_GREEN if sig else C_GRAY_DARK}">{p_val:.4f}</div></div>', unsafe_allow_html=True)
-                r2.markdown(f'<div class="metric-card"><div class="metric-label">Lift (B vs A)</div><div class="metric-value" style="color:{C_GREEN if lift>0 else "#F43F5E"}">{lift:+.1f}%</div></div>', unsafe_allow_html=True)
-                r3.markdown(f'<div class="metric-card"><div class="metric-label">Result</div><div class="metric-value" style="font-size:18px;color:{C_GREEN if sig else C_GRAY_DARK}">{ "✅ Significant" if sig else "❌ Not Significant"}</div></div>', unsafe_allow_html=True)
+                r1.metric("p-value", f"{p_val:.4f}")
+                r2.metric("Lift (B vs A)", f"{lift:+.1f}%")
+                r3.metric("Result", "✅ Significant" if sig else "❌ Not Significant")
                 ab_plot = pd.DataFrame({"Value": list(a_data) + list(b_data), "Group": [grp_a]*len(a_data) + [grp_b]*len(b_data)})
                 fig_ab = px.histogram(ab_plot, x="Value", color="Group", barmode="overlay", opacity=0.7, color_discrete_sequence=[C_AMBER, C_GREEN], title=f"Distribution: {grp_a} vs {grp_b}")
                 st.plotly_chart(style_plotly(fig_ab), use_container_width=True)
 
-# ── 8. BUSINESS INSIGHTS ─────────────────────────────────────────────────────
-with tabs[8]:
+# ── BUSINESS INSIGHTS (Intelligence) ────────────────────────────────────────
+with tabs[3]:
     st.markdown('<div class="step-banner">💡 Business Decision Support & Plain-English Insights</div>', unsafe_allow_html=True)
     st.markdown('<div class="explanation-box"><b>What this does:</b> Automatically analyzes your dataset to surface deep, actionable business insights across performance, risk, segmentation, and key drivers. No technical knowledge required.</div>', unsafe_allow_html=True)
 
@@ -766,8 +763,9 @@ with tabs[8]:
         for idx, r in enumerate(recs, 1):
             st.markdown(f"{idx}. {r}")
 
-# ── 9. AUTOMATION ────────────────────────────────────────────────────────────
-with tabs[9]:
+# ── AUTOMATION (Management) ───────────────────────────────────────────────────
+with tabs[4]:
+    st.markdown("---")
     st.markdown('<div class="step-banner">⚙️ Automation & Report Generation</div>', unsafe_allow_html=True)
     st.markdown('<div class="explanation-box"><b>What this does:</b> Auto-generates a ready-to-share text report and provides reusable Python scripts to automate your data workflow.</div>', unsafe_allow_html=True)
 
@@ -829,8 +827,9 @@ print('Missing:', df.isna().sum().sum())
         st.code(script, language="python")
         st.download_button("⬇️ Download Script (.py)", script.encode(), "auto_analysis.py", "text/x-python", use_container_width=True)
 
-# ── 10. GOVERNANCE ───────────────────────────────────────────────────────────
-with tabs[10]:
+# ── GOVERNANCE (Management) ───────────────────────────────────────────────────
+with tabs[4]:
+    st.markdown("---")
     st.markdown('<div class="step-banner">🏛️ Data Governance, Quality & Strategy</div>', unsafe_allow_html=True)
     st.markdown('<div class="explanation-box"><b>What this does:</b> Provides a full data quality audit, schema documentation, and strategic data health score to maintain governance standards.</div>', unsafe_allow_html=True)
 
@@ -854,7 +853,7 @@ with tabs[10]:
         dup_rows = df.duplicated().sum()
         health = max(0, 100 - (missing_cells / total_cells * 60) - (dup_rows / len(df) * 40))
         color = C_GREEN if health > 75 else (C_AMBER if health > 50 else "#F43F5E")
-        st.markdown(f'<div class="metric-card" style="text-align:center;"><div class="metric-label">Overall Data Health Score</div><div class="metric-value" style="color:{color};font-size:48px;">{health:.0f}/100</div></div>', unsafe_allow_html=True)
+        st.metric("Overall Data Health Score", f"{health:.0f}/100")
 
     with gov_c2:
         st.markdown("##### 📖 Data Dictionary / Schema")
@@ -876,8 +875,9 @@ with tabs[10]:
             icon = "✅" if passed else "❌"
             st.markdown(f"{icon} {label}")
 
-# ── 11. RAW DATA ─────────────────────────────────────────────────────────────
-with tabs[11]:
+# ── RAW DATA (Management) ─────────────────────────────────────────────────────
+with tabs[4]:
+    st.markdown("---")
     st.markdown("##### 🔎 Filtered & Cleaned Records")
     st.dataframe(df, use_container_width=True, height=450)
     st.download_button("⬇️ Export to CSV", df.to_csv(index=False).encode("utf-8"), "dataset_export.csv", "text/csv")
