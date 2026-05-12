@@ -130,115 +130,40 @@ if uploaded_files:
             tmp.flush()
             st.session_state.dataset_registry[uf.name] = (tmp.name, is_csv_f)
 
-# ── Sidebar: Dataset selector ────────────────────────────────────────────────
-st.sidebar.markdown("### ⚙️ 2. Configuration")
+# ── Auto-Select Latest Dataset ────────────────────────────────────────────────
 all_dataset_labels = list(st.session_state.dataset_registry.keys())
 
-# Merge option only when >1 dataset
-merge_mode = False
-if len(all_dataset_labels) > 1:
-    merge_mode = st.sidebar.checkbox("🔀 Merge ALL datasets into one", value=False, key="merge_mode")
-
 if not all_dataset_labels:
-    # Fall back to default file
     active_label = "sales_data.xlsx (default)"
-    active_path = default_path
+    active_path = "sales_data.xlsx"
     active_is_csv = False
 else:
-    if merge_mode:
-        active_label = "__MERGED__"
-    else:
-        active_label = st.sidebar.selectbox("🗂️ Select Dataset to Analyse", all_dataset_labels, key="active_ds")
+    active_label = all_dataset_labels[-1]
+    active_path, active_is_csv = st.session_state.dataset_registry[active_label]
 
-# Per-dataset sheet / skip config
-if not merge_mode:
-    if all_dataset_labels:
-        active_path, active_is_csv = st.session_state.dataset_registry[active_label]
-    else:
-        active_path, active_is_csv = default_path, False
-
-    selected_sheet = None
-    if not active_is_csv:
-        try:
-            sheets = get_sheet_names(active_path)
-            selected_sheet = st.sidebar.selectbox("📄 Select Excel Sheet", sheets, key="sheet_sel")
-        except Exception as e:
-            st.error(f"Failed to read sheets: {e}")
-            st.stop()
-    skip_rows = st.sidebar.number_input("Skip Header Rows", min_value=0, value=0, key="skip_rows")
-
+selected_sheet = None
+if not active_is_csv:
     try:
-        raw_df = load_data(active_path, sheet_name=selected_sheet, skiprows=skip_rows, is_csv=active_is_csv)
+        sheets = pd.ExcelFile(active_path).sheet_names
+        selected_sheet = sheets[0]
     except Exception as e:
-        st.error(f"Error loading '{active_label}': {e}")
-        st.stop()
+        pass
+skip_rows = 0
 
-    config_id = f"{active_label}_{selected_sheet}_{skip_rows}"
-    if ("clean_df" not in st.session_state
-            or st.session_state.get("config_id") != config_id):
-        st.session_state.clean_df = raw_df.copy()
-        st.session_state.config_id = config_id
-        st.session_state.cleaning_logs = []
+try:
+    raw_df = load_data(active_path, sheet_name=selected_sheet, skiprows=skip_rows, is_csv=active_is_csv)
+except Exception as e:
+    raw_df = pd.DataFrame()
 
-else:
-    # ── MERGE MODE ──────────────────────────────────────────────────────────
-    skip_rows = st.sidebar.number_input("Skip Header Rows (applied to each file)", min_value=0, value=0, key="skip_rows_merge")
-    merged_frames = []
-    for lbl, (path, is_csv_f) in st.session_state.dataset_registry.items():
-        try:
-            sheet = None
-            if not is_csv_f:
-                sheet = get_sheet_names(path)[0]
-            fdf = load_data(path, sheet_name=sheet, skiprows=skip_rows, is_csv=is_csv_f)
-            fdf["_source_file"] = lbl          # tag rows with source filename
-            merged_frames.append(fdf)
-        except Exception as e:
-            st.warning(f"Skipped '{lbl}': {e}")
-
-    if not merged_frames:
-        st.error("Could not load any of the uploaded files.")
-        st.stop()
-
-    merge_how = st.sidebar.radio("Merge Strategy", ["Stack (append rows)", "Join on common columns"], key="merge_how")
-    if merge_how == "Stack (append rows)":
-        raw_df = pd.concat(merged_frames, ignore_index=True)
-    else:
-        raw_df = merged_frames[0]
-        for fdf in merged_frames[1:]:
-            common = list(set(raw_df.columns) & set(fdf.columns))
-            if common:
-                raw_df = pd.merge(raw_df, fdf, on=common, how="outer", suffixes=("", f"_{fdf['_source_file'].iloc[0]}"))
-            else:
-                raw_df = pd.concat([raw_df, fdf], ignore_index=True)
-
-    config_id = f"merged_{'_'.join(all_dataset_labels)}_{skip_rows}_{merge_how}"
-    if ("clean_df" not in st.session_state
-            or st.session_state.get("config_id") != config_id):
-        st.session_state.clean_df = raw_df.copy()
-        st.session_state.config_id = config_id
-        st.session_state.cleaning_logs = []
+config_id = f"{active_label}_{selected_sheet}_{skip_rows}"
+if ("clean_df" not in st.session_state or st.session_state.get("config_id") != config_id):
+    st.session_state.clean_df = raw_df.copy()
+    st.session_state.config_id = config_id
+    st.session_state.cleaning_logs = []
 
 # ── Dataset status banner ────────────────────────────────────────────────────
 if len(all_dataset_labels) > 0:
-    if merge_mode:
-        st.info(f"🔀 **Merged Mode** — {len(all_dataset_labels)} datasets combined | {st.session_state.clean_df.shape[0]:,} rows × {st.session_state.clean_df.shape[1]} cols")
-    else:
-        cols_status = st.columns(len(all_dataset_labels))
-        for i, lbl in enumerate(all_dataset_labels):
-            p, ic = st.session_state.dataset_registry[lbl]
-            try:
-                _tmp = load_data(p, is_csv=ic)
-                badge = f"✅ **{lbl}**  `{_tmp.shape[0]:,}r × {_tmp.shape[1]}c`"
-            except:
-                badge = f"❌ **{lbl}** (error)"
-            is_active = "border: 2px solid #F8D870;" if lbl == active_label else ""
-            cols_status[i].markdown(
-                f"<div class='metric-card' style='padding:12px 16px;{is_active}'>"
-                f"<div class='metric-label'>Dataset {i+1}</div>"
-                f"<div style='font-size:13px;color:#F9FAFB'>{badge}</div></div>",
-                unsafe_allow_html=True
-            )
-
+    st.info(f"✅ **Analyzing:** `{active_label}`  |  **{st.session_state.clean_df.shape[0]:,}** rows × **{st.session_state.clean_df.shape[1]}** cols")
 df = st.session_state.clean_df
 
 # Classify columns
