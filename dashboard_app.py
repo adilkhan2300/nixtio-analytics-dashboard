@@ -134,16 +134,13 @@ def style_plotly(fig):
     return fig
 
 # ═══════════════════════════════════════════════════════════════════════════
-# DATA LOADING ENGINE
+# DATA LOADING ENGINE  (multi-dataset)
 # ═══════════════════════════════════════════════════════════════════════════
 st.title("📊 Autonomous Data Analytics Engine")
 st.markdown("#### Self-cleaning, intelligent exploratory data analysis")
 st.markdown("---")
 
-st.sidebar.markdown("### 📂 1. Upload Data")
-uploaded = st.sidebar.file_uploader("Upload Excel or CSV file", type=["xlsx", "xls", "csv"])
-default_path = "sales_data.xlsx"
-
+# ── Helper functions ────────────────────────────────────────────────────────
 @st.cache_data
 def get_sheet_names(path):
     return pd.ExcelFile(path).sheet_names
@@ -156,66 +153,166 @@ def load_data(path, sheet_name=None, skiprows=0, is_csv=False):
         xl = pd.ExcelFile(path)
         sheet = sheet_name if sheet_name else xl.sheet_names[0]
         df = xl.parse(sheet, skiprows=skiprows)
-    
-    # 1. Drop completely empty rows and columns
     df.dropna(how='all', axis=0, inplace=True)
     df.dropna(how='all', axis=1, inplace=True)
-    
-    # 2. Smart Parsing: Try to convert currency/percentage strings to floats
     for col in df.columns:
         if df[col].dtype == 'object':
-            # Check if it looks like a currency ($1,200.50)
-            if df[col].astype(str).str.match(r'^\$?\s*[\d,]+(\.\d+)?$').all():
+            if df[col].astype(str).str.match(r'^\$?\s*[\d,]+(\.[\d]+)?$').all():
                 try: df[col] = df[col].replace({'\$': '', ',': ''}, regex=True).astype(float)
                 except: pass
-            # Check if it looks like a percentage (45%)
             elif df[col].astype(str).str.match(r'^-?\d+(\.\d+)?%$').all():
                 try: df[col] = df[col].replace({'%': ''}, regex=True).astype(float) / 100
                 except: pass
-                
-    # 3. Auto-parse dates
     for col in df.columns:
         if df[col].dtype == 'object':
             if df[col].astype(str).str.contains(r'^\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}', regex=True).any():
                 try: df[col] = pd.to_datetime(df[col], errors='ignore')
                 except: pass
-                
     return df
 
-# Handle Complex File Ingestion
-file_path_to_use = default_path
-is_csv = False
+# ── Sidebar: Multi-file upload ───────────────────────────────────────────────
+st.sidebar.markdown("### 📂 1. Upload Datasets")
+st.sidebar.markdown("<small style='color:#9CA3AF;'>Upload one or more Excel / CSV files at once.</small>", unsafe_allow_html=True)
+uploaded_files = st.sidebar.file_uploader(
+    "Upload Excel or CSV files",
+    type=["xlsx", "xls", "csv"],
+    accept_multiple_files=True,
+    key="multi_upload"
+)
+default_path = "sales_data.xlsx"
 
-if uploaded:
-    is_csv = uploaded.name.endswith(".csv")
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv" if is_csv else ".xlsx") as tmp:
-        tmp.write(uploaded.read())
-        file_path_to_use = tmp.name
+# Build registry: {label -> (tmp_path, is_csv)}
+if "dataset_registry" not in st.session_state:
+    st.session_state.dataset_registry = {}
+if "datasets_loaded" not in st.session_state:
+    st.session_state.datasets_loaded = {}   # label -> DataFrame
+if "cleaning_logs" not in st.session_state:
+    st.session_state.cleaning_logs = []
 
+# Process newly uploaded files
+if uploaded_files:
+    current_names = {f.name for f in uploaded_files}
+    # Remove stale entries
+    st.session_state.dataset_registry = {
+        k: v for k, v in st.session_state.dataset_registry.items() if k in current_names
+    }
+    for uf in uploaded_files:
+        if uf.name not in st.session_state.dataset_registry:
+            is_csv_f = uf.name.lower().endswith(".csv")
+            suffix = ".csv" if is_csv_f else ".xlsx"
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            tmp.write(uf.read())
+            tmp.flush()
+            st.session_state.dataset_registry[uf.name] = (tmp.name, is_csv_f)
+
+# ── Sidebar: Dataset selector ────────────────────────────────────────────────
 st.sidebar.markdown("### ⚙️ 2. Configuration")
-selected_sheet = None
-if not is_csv:
+all_dataset_labels = list(st.session_state.dataset_registry.keys())
+
+# Merge option only when >1 dataset
+merge_mode = False
+if len(all_dataset_labels) > 1:
+    merge_mode = st.sidebar.checkbox("🔀 Merge ALL datasets into one", value=False, key="merge_mode")
+
+if not all_dataset_labels:
+    # Fall back to default file
+    active_label = "sales_data.xlsx (default)"
+    active_path = default_path
+    active_is_csv = False
+else:
+    if merge_mode:
+        active_label = "__MERGED__"
+    else:
+        active_label = st.sidebar.selectbox("🗂️ Select Dataset to Analyse", all_dataset_labels, key="active_ds")
+
+# Per-dataset sheet / skip config
+if not merge_mode:
+    if all_dataset_labels:
+        active_path, active_is_csv = st.session_state.dataset_registry[active_label]
+    else:
+        active_path, active_is_csv = default_path, False
+
+    selected_sheet = None
+    if not active_is_csv:
+        try:
+            sheets = get_sheet_names(active_path)
+            selected_sheet = st.sidebar.selectbox("📄 Select Excel Sheet", sheets, key="sheet_sel")
+        except Exception as e:
+            st.error(f"Failed to read sheets: {e}")
+            st.stop()
+    skip_rows = st.sidebar.number_input("Skip Header Rows", min_value=0, value=0, key="skip_rows")
+
     try:
-        sheets = get_sheet_names(file_path_to_use)
-        selected_sheet = st.sidebar.selectbox("Select Excel Sheet", sheets)
+        raw_df = load_data(active_path, sheet_name=selected_sheet, skiprows=skip_rows, is_csv=active_is_csv)
     except Exception as e:
-        st.error(f"Failed to read sheets: {e}")
+        st.error(f"Error loading '{active_label}': {e}")
         st.stop()
 
-skip_rows = st.sidebar.number_input("Skip Header Rows (If data starts lower)", min_value=0, value=0)
+    config_id = f"{active_label}_{selected_sheet}_{skip_rows}"
+    if ("clean_df" not in st.session_state
+            or st.session_state.get("config_id") != config_id):
+        st.session_state.clean_df = raw_df.copy()
+        st.session_state.config_id = config_id
+        st.session_state.cleaning_logs = []
 
-try:
-    raw_df = load_data(file_path_to_use, sheet_name=selected_sheet, skiprows=skip_rows, is_csv=is_csv)
-except Exception as e:
-    st.error(f"Error loading data. Check if 'Skip Rows' is correct. Error: {e}")
-    st.stop()
+else:
+    # ── MERGE MODE ──────────────────────────────────────────────────────────
+    skip_rows = st.sidebar.number_input("Skip Header Rows (applied to each file)", min_value=0, value=0, key="skip_rows_merge")
+    merged_frames = []
+    for lbl, (path, is_csv_f) in st.session_state.dataset_registry.items():
+        try:
+            sheet = None
+            if not is_csv_f:
+                sheet = get_sheet_names(path)[0]
+            fdf = load_data(path, sheet_name=sheet, skiprows=skip_rows, is_csv=is_csv_f)
+            fdf["_source_file"] = lbl          # tag rows with source filename
+            merged_frames.append(fdf)
+        except Exception as e:
+            st.warning(f"Skipped '{lbl}': {e}")
 
-# Initialize session state for cleaned dataframe
-config_id = f"{uploaded.name if uploaded else 'default'}_{selected_sheet}_{skip_rows}"
-if "clean_df" not in st.session_state or "config_id" not in st.session_state or st.session_state.config_id != config_id:
-    st.session_state.clean_df = raw_df.copy()
-    st.session_state.config_id = config_id
-    st.session_state.cleaning_logs = []
+    if not merged_frames:
+        st.error("Could not load any of the uploaded files.")
+        st.stop()
+
+    merge_how = st.sidebar.radio("Merge Strategy", ["Stack (append rows)", "Join on common columns"], key="merge_how")
+    if merge_how == "Stack (append rows)":
+        raw_df = pd.concat(merged_frames, ignore_index=True)
+    else:
+        raw_df = merged_frames[0]
+        for fdf in merged_frames[1:]:
+            common = list(set(raw_df.columns) & set(fdf.columns))
+            if common:
+                raw_df = pd.merge(raw_df, fdf, on=common, how="outer", suffixes=("", f"_{fdf['_source_file'].iloc[0]}"))
+            else:
+                raw_df = pd.concat([raw_df, fdf], ignore_index=True)
+
+    config_id = f"merged_{'_'.join(all_dataset_labels)}_{skip_rows}_{merge_how}"
+    if ("clean_df" not in st.session_state
+            or st.session_state.get("config_id") != config_id):
+        st.session_state.clean_df = raw_df.copy()
+        st.session_state.config_id = config_id
+        st.session_state.cleaning_logs = []
+
+# ── Dataset status banner ────────────────────────────────────────────────────
+if len(all_dataset_labels) > 0:
+    if merge_mode:
+        st.info(f"🔀 **Merged Mode** — {len(all_dataset_labels)} datasets combined | {st.session_state.clean_df.shape[0]:,} rows × {st.session_state.clean_df.shape[1]} cols")
+    else:
+        cols_status = st.columns(len(all_dataset_labels))
+        for i, lbl in enumerate(all_dataset_labels):
+            p, ic = st.session_state.dataset_registry[lbl]
+            try:
+                _tmp = load_data(p, is_csv=ic)
+                badge = f"✅ **{lbl}**  `{_tmp.shape[0]:,}r × {_tmp.shape[1]}c`"
+            except:
+                badge = f"❌ **{lbl}** (error)"
+            is_active = "border: 2px solid #F8D870;" if lbl == active_label else ""
+            cols_status[i].markdown(
+                f"<div class='metric-card' style='padding:12px 16px;{is_active}'>"
+                f"<div class='metric-label'>Dataset {i+1}</div>"
+                f"<div style='font-size:13px;color:#F9FAFB'>{badge}</div></div>",
+                unsafe_allow_html=True
+            )
 
 df = st.session_state.clean_df
 
