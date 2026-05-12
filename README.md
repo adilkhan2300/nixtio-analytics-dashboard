@@ -1,15 +1,17 @@
 # 📊 Autonomous Data Analytics Engine
 
-A powerful, generic data analytics and cleaning dashboard built entirely in Python using **Streamlit** and **Plotly**. This application is designed to take *any* raw Excel or CSV file and automatically process it, generating advanced statistical modeling, exploratory charts, and data health diagnostics.
+A powerful, generic data analytics and cleaning dashboard built entirely in Python using **Streamlit**, **Plotly**, **Scikit-learn**, and **SciPy**. This application is designed to take *any* raw Excel or CSV files and automatically process them, generating advanced statistical modeling, exploratory charts, and automated business intelligence.
 
-## ✨ Features
+## ✨ Core Features
 
 * **🧹 Autonomous Data Cleaning:** One-click engine to drop duplicates, impute missing numeric values with medians, label missing categorical values, and clean text strings.
-* **📈 Dynamic Profiling:** Automatically detects numeric, categorical, and timeline columns, generating top-level metrics on the fly.
-* **📦 Outlier Detection:** Interactive Histograms and Box & Whisker plots to identify data skew and outliers.
-* **🔄 Correlation Engine:** Multi-variable correlation matrices and dynamic scatter plots to find hidden relationships.
-* **📅 Time Intelligence:** If time-series data is detected, it automatically plots monthly trends and Day-of-Week seasonality.
-* **🎯 Advanced Cross-Analysis:** Pareto (80/20 Rule) charts and multi-dimensional Cross-Tabulation heatmaps.
+* **🔀 Multi-Dataset Merging:** Upload multiple datasets simultaneously and stack (append) or join them automatically on common columns for complex analysis.
+* **📈 Dynamic Profiling:** Automatically detects numeric, categorical, and timeline columns, generating top-level metrics and distributions on the fly.
+* **🤖 Predictive Modeling:** Train Linear Regression or Random Forest models directly in the UI to predict metrics and analyze feature importance.
+* **🧪 A/B Testing:** Run statistically significant T-tests to compare performance across different data segments.
+* **💡 Deep Business Insights:** Auto-generates a detailed Executive Summary analyzing Performance Trends, Volatility/Risk Factors, Market Segmentation, and Key Drivers, ending with a dynamic Executive Action Plan.
+* **⚙️ Automation & Governance:** Instantly generate summary text reports, export reusable Python analysis scripts, and view overall Data Health scores.
+* **📂 Large File Support:** Streamlit configuration included to allow ingestion of massive files up to **1 GB**.
 
 ---
 
@@ -48,7 +50,8 @@ This will automatically open the dashboard in your default web browser at `http:
 
 ## 🖥️ Usage Guide
 
-1. **Upload Data:** Use the sidebar on the left to upload any `.csv` or `.xlsx` file. If none is provided, it will fallback to `sales_data.xlsx`.
+1. **Upload Data:** Use the sidebar on the left to upload one or multiple `.csv` or `.xlsx` files. You can choose to join or stack multiple datasets.
 2. **Clean Data:** Head to the **Data Cleaning** tab to review data health. Click **✨ Auto-Clean Dataset** to instantly fix NaNs and duplicates.
-3. **Explore Tabs:** Navigate through the top tabs (Overview, Distributions, Correlations, Time Intel, Deep Dive) to interact with your newly cleaned data. Dropdowns within the tabs will dynamically update based on the columns available in your specific dataset.
-4. **Export:** Go to the **Raw Data** tab to download your fully cleaned and processed CSV file.
+3. **Explore Tabs:** Navigate through the 11 specialized tabs (Overview, Distributions, Correlations, Time Intel, Deep Dive, Predictive Models, A/B Testing, Business Insights, Automation, Governance, and Raw Data).
+4. **Actionable Insights:** Visit the **Business Insights** tab for a fully written plain-English analysis of your uploaded datasets.
+5. **Export:** Export cleaned data, generated Python scripts, and automated summary reports directly from the interface.
