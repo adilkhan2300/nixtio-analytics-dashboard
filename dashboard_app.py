@@ -49,6 +49,21 @@ st.sidebar.markdown("### 🎨 0. Theme Settings")
 selected_theme = st.sidebar.selectbox("Choose Theme Color", list(THEMES.keys()), key="theme_selector")
 C_PRIMARY = THEMES[selected_theme]
 
+# Optional matrix color scales
+MATRIX_CMAPS = {
+    "Theme Default": ["#1F2937", C_PRIMARY, "#FFFFFF"],
+    "Viridis": "Viridis",
+    "Plasma": "Plasma",
+    "Inferno": "Inferno",
+    "Magma": "Magma",
+    "Blues": "Blues",
+    "Reds": "Reds",
+    "Greens": "Greens",
+    "Earth": "Earth"
+}
+selected_cmap_name = st.sidebar.selectbox("Matrix Color Scale", list(MATRIX_CMAPS.keys()), key="cmap_selector")
+SELECTED_CMAP = MATRIX_CMAPS[selected_cmap_name]
+
 # ─── Custom CSS (Dark Theme) ────────────────────────────────────────────────
 st.markdown(f"""
 <style>
@@ -504,7 +519,7 @@ with tabs[3]:
         if len(numeric_cols) > 1:
             corr = df[numeric_cols].corr()
             fig_corr = px.imshow(corr, text_auto=".2f", aspect="auto", 
-                                 color_continuous_scale=[C_GRAY_LIGHT, C_AMBER, C_WHITE], zmin=-1, zmax=1)
+                                 color_continuous_scale=SELECTED_CMAP, zmin=-1, zmax=1)
             fig_corr = style_plotly(fig_corr)
             fig_corr.update_layout(height=450, margin=dict(l=0, r=0, t=10, b=0))
             st.plotly_chart(fig_corr, use_container_width=True)
@@ -600,7 +615,7 @@ with tabs[5]:
             if ct_row != ct_col:
                 pivot = df.pivot_table(values=ct_val, index=ct_row, columns=ct_col, aggfunc="sum").fillna(0)
                 fig_ct = px.imshow(pivot, text_auto=".2s", aspect="auto", 
-                                   color_continuous_scale=[C_GRAY_LIGHT, C_AMBER, C_WHITE],
+                                   color_continuous_scale=SELECTED_CMAP,
                                    title=f"{ct_val} by {ct_row} & {ct_col}")
                 fig_ct = style_plotly(fig_ct)
                 st.plotly_chart(fig_ct, use_container_width=True)
