@@ -250,7 +250,9 @@ categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).colu
 # ═══════════════════════════════════════════════════════════════════════════
 # ANALYTICS ENGINE TABS
 # ═══════════════════════════════════════════════════════════════════════════
-tabs = st.tabs([
+main_col, chat_col = st.columns([3.5, 1.5], gap="large")
+
+tabs = main_col.tabs([
     "🧹 Data Cleaning",
     "📈 Overview",
     "📦 Distributions",
@@ -885,25 +887,27 @@ with tabs[11]:
 st.markdown("---")
 st.markdown("<p style='text-align:center;color:#9CA3AF;font-size:13px;'>Data Analytics Dashboard • Built with Streamlit</p>", unsafe_allow_html=True)
 
-# ── SIDEBAR CHATBOT ──────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("---")
-    st.markdown("### 💬 AI Data Chatbot")
+# ── RIGHT SIDEBAR CHATBOT ────────────────────────────────────────────────────
+with chat_col:
+    st.markdown("### 💬 AI Chatbot")
     st.markdown("<small style='color:#9CA3AF;'>Ask questions about your data in plain English.</small>", unsafe_allow_html=True)
+    
+    # Create a scrollable container for chat history
+    chat_container = st.container(height=600)
     
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = [{"role": "assistant", "content": "Hi! Ask me anything about your data."}]
         
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            
-    with st.form("chat_form", clear_on_submit=True):
-        prompt = st.text_input("Ask a question...")
-        submitted = st.form_submit_button("Send")
-        
-    if submitted and prompt:
+    with chat_container:
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                
+    if prompt := st.chat_input("Ask a question about your data..."):
         st.session_state.chat_history.append({"role": "user", "content": prompt})
+        with chat_container:
+            with st.chat_message("user"):
+                st.markdown(prompt)
         
         prompt_lower = prompt.lower()
         response = ""
@@ -939,4 +943,6 @@ with st.sidebar:
             response = "Try: 'Which is best?', 'Why are numbers low?', or 'Summarize'."
         
         st.session_state.chat_history.append({"role": "assistant", "content": response})
-        st.rerun()
+        with chat_container:
+            with st.chat_message("assistant"):
+                st.markdown(response)
