@@ -19,7 +19,7 @@ The application is built entirely in Python, leveraging a modern data science st
 ## ⚙️ Core Technical Modules
 
 ### 1. Data Ingestion & Session Management
-* **Multi-Dataset Handling:** Uses `st.session_state` to persist a dataset registry, allowing users to upload multiple files (up to 1GB per file via `.streamlit/config.toml`). 
+* **Multi-Dataset Handling:** Uses `st.session_state` to persist a dataset registry, allowing users to upload multiple files. 
 * **Dynamic Merging:** Utilizes `pd.merge` (outer joins) to map common schema columns, or `pd.concat` to vertically stack datasets.
 * **Smart Parsing:** Employs regex and type-casting strategies to automatically convert currency strings (e.g., `$1,200`), percentages, and raw dates into native float/datetime datatypes during the initial data load.
 
@@ -50,9 +50,6 @@ nixtio-analytics-dashboard/
 ├── generate_sample_data.py    # Faker script to generate localized dummy sales data
 ├── requirements.txt           # Python dependency manifest
 ├── README.md                  # Project documentation
-│
-└── .streamlit/
-    └── config.toml            # Server configuration (e.g., maxUploadSize = 1000MB)
 ```
 
 ---
